@@ -1,0 +1,51 @@
+# Coding guide
+
+This file provides guidance to AI agents when working with code in this repository.
+
+## Repository Overview
+
+This repo contains source code of the ToyTS library - PyTorch-native online synthetic time series dataset generator.
+
+## Work planning
+
+- By default assume that all requests are "feature requests" and should be implemented in a single phase.
+- If I explicietly request to be agile, follow the agile approach: Split the work into phases where each phase delivers a working system that can be immediately used for research, with each subsequent phase building upon the previous one.
+- NO API GUESSING. Use Context7 MCP to validate API of external libraries. If Context7 doesn't help - use Perplexity MCP to validate.
+
+## Code Guidelines
+- Use Python for all development
+- Keep the code clean with a solid separation of actual actions and presentation
+- Make sure the code is idiomatic Python
+  - Follow PEP 585 and PEP 604
+- Make sure the code is DRY
+- Keep the code minimal
+- KISS
+  - To follow the KISS principle, always implement one best solution instead of implementing a multitude of options - build a unittest or a benchmark to choose which one is the best and use it. And if this option requires installing some library which is not installed, just generate a fatal error or an exception.
+  - To follow the KISS principle, always implement the solution with the minimal amount of code.
+- Fail fast and always return or raise a human-readable error with enough context to understand what exactly has happened and how to fix it.
+- NO silent defaults.
+- NO defensive programming!
+- Use human-readable meaningful variable and function names. Avoid one-letter naming.
+- Add comments with tensor dimensions to all PyTorch tensors.
+
+## Project rules
+
+## Python Development Tooling
+- Use 'uv' for Python package management.
+- Never protect from missing packages - it should fail right away. If the package is missing, you either forgot to install it using 'uv add' or you're not running using .venv. Use 'uv run' to run scripts.
+- Use 'pytest' for writing unit tests in Python.
+
+## Code Maintenance Principles
+- Always have only one version of the code. If something can be done in two-three ways, choose the best one (google, test or ask me) and implement. 
+- When reimplementing existing code, don't keep it "for fallback" - instead, use unittests to make sure the new code is performing the same way or better
+- ALWAYS run unittests after changing the code and before you report that the job is done.
+- Put unittests into the tests/ subdirectory.
+- Use prefixing for tool naming. I.e. a tool to get an item from a knowledge base should be kb_get_item(), not get_item_from_kb().
+
+## Development Best Practices
+- ALWAYS clean up temprorary files.
+- Use 'uv run python -m' to run python code to avoid module import errors. YOU MUST NOT use 'sys.path.insert'
+
+## Planning
+- Write plans to files in Markdown.
+- Put plans into the plans/ subridectory with a unique descriptive name and .md file type. Start each file name with "N_" prefix where N is a unique increasing counter.
