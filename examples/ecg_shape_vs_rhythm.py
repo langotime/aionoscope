@@ -1,0 +1,116 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+import torch
+from torch import nn
+
+from toyts import (
+    BaselineWanderView,
+    ECGLeadsView,
+    NoiseView,
+    NormalizeView,
+    PulseTrainProcess,
+    SynthPipeline,
+)
+from toyts.core.utils import utils_make_canonical_A0
+
+
+def main() -> None:
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    process = PulseTrainProcess(
+        seq_len=2048,
+        num_pulses=8,
+        rhythm_classes=["regular", "irregular", "missed_beat"],
+        shape_classes=["gaussian", "sharp_laplace", "biphasic_dog"],
+        latent_mode="pqrst3",
+        amplitude=1.0,
+    )
+
+    A0 = utils_make_canonical_A0(num_leads=12, num_latent=3).to(device)  # [C, K]
+
+    views = {
+        "clean": ECGLeadsView(A0=A0, jitter_std=0.03, max_delay=3),
+        "noisy": nn.Sequential(
+            ECGLeadsView(A0=A0, jitter_std=0.03, max_delay=3),
+            BaselineWanderView(amplitude_std=0.2, freq_min=0.1, freq_max=0.5),
+            NoiseView(noise_std=0.15),
+            NormalizeView(),
+        ),
+    }
+
+    pipeline = SynthPipeline(process=process, views=views)
+    batch = pipeline(batch_size=64, device=device)
+
+    clean = batch["clean"].x  # [B, C, L]
+    noisy = batch["noisy"].x  # [B, C, L]
+
+    shape_labels = batch["clean"].y["shape"]  # [B]
+    rhythm_labels = batch["clean"].y["rhythm"]  # [B]
+
+    shape_names = batch["clean"].meta["process"]["shape_names"]
+    rhythm_names = batch["clean"].meta["process"]["rhythm_names"]
+
+    fig, axes = plt.subplots(2, 2, figsize=(14, 8))
+    fig.suptitle("ECG: clean vs noisy views and labels")
+
+    _plot_multilead(axes[0, 0], clean[0], "clean view")  # [C, L]
+    _plot_multilead(axes[0, 1], noisy[0], "noisy view")  # [C, L]
+    _plot_label_hist(axes[1, 0], shape_labels, shape_names, "shape labels")
+    _plot_label_hist(axes[1, 1], rhythm_labels, rhythm_names, "rhythm labels")
+
+    fig.tight_layout()
+
+    output_dir = Path(__file__).resolve().parent / "figures"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / "ecg_shape_vs_rhythm.png"
+    fig.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+    print("clean", clean.shape, clean.dtype)
+    print("noisy", noisy.shape, noisy.dtype)
+    print("shape labels", shape_labels[:5])
+    print("rhythm labels", rhythm_labels[:5])
+    print("saved figure", output_path)
+
+
+def _plot_multilead(ax: plt.Axes, signal: torch.Tensor, title: str) -> None:
+    signal_cpu = signal.detach().cpu()  # [C, L]
+    num_leads, seq_len = signal_cpu.shape
+
+    time_axis = torch.arange(seq_len)  # [L]
+    time_values = time_axis.tolist()
+
+    offset_scale = signal_cpu.abs().max().item()
+    offsets = torch.arange(num_leads) * (offset_scale * 2.5)  # [C]
+
+    for lead_idx in range(num_leads):
+        lead_values = (signal_cpu[lead_idx] + offsets[lead_idx]).tolist()  # [L]
+        ax.plot(time_values, lead_values, linewidth=0.8)
+
+    ax.set_title(title)
+    ax.set_xlabel("time")
+    ax.set_ylabel("lead + offset")
+    ax.grid(True, alpha=0.3)
+
+
+def _plot_label_hist(
+    ax: plt.Axes,
+    labels: torch.Tensor,
+    names: list[str],
+    title: str,
+) -> None:
+    labels_cpu = labels.detach().cpu()  # [B]
+    counts = torch.bincount(labels_cpu, minlength=len(names))  # [K]
+
+    ax.bar(range(len(names)), counts.tolist())
+    ax.set_xticks(range(len(names)))
+    ax.set_xticklabels(names, rotation=15, ha="right")
+    ax.set_title(title)
+    ax.set_ylabel("count")
+
+
+if __name__ == "__main__":
+    main()

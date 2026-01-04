@@ -1,0 +1,109 @@
+from __future__ import annotations
+
+import torch
+
+from ..core.rng import rng_make_generator
+from ..core.types import LatentState, Observation
+from ..core.utils import utils_extract_process_meta
+from .base import View
+
+
+class MissingnessView(View):
+    def __init__(
+        self,
+        *,
+        dropout_prob: float,
+        gap_prob: float,
+        gap_length: int,
+        hold_prob: float,
+    ) -> None:
+        super().__init__()
+        if not (0.0 <= dropout_prob <= 1.0):
+            raise ValueError("dropout_prob must be in [0, 1].")
+        if not (0.0 <= gap_prob <= 1.0):
+            raise ValueError("gap_prob must be in [0, 1].")
+        if gap_length < 0:
+            raise ValueError("gap_length must be non-negative.")
+        if not (0.0 <= hold_prob <= 1.0):
+            raise ValueError("hold_prob must be in [0, 1].")
+
+        self.dropout_prob = dropout_prob
+        self.gap_prob = gap_prob
+        self.gap_length = gap_length
+        self.hold_prob = hold_prob
+
+    def forward(
+        self,
+        input_state: LatentState | Observation,
+        *,
+        rng: torch.Generator | None = None,
+    ) -> Observation:
+        if isinstance(input_state, LatentState):
+            raise TypeError("MissingnessView expects an Observation, got LatentState.")
+
+        process_meta = utils_extract_process_meta(input_state.meta)
+        generator, seed, _ = rng_make_generator(rng=rng, device=input_state.x.device)
+        observed_signal = input_state.x  # [B, C, L]
+        batch_size, channels, seq_len = observed_signal.shape
+
+        if self.dropout_prob > 0:
+            keep = torch.rand(
+                (batch_size, channels, seq_len),
+                generator=generator,
+                device=input_state.x.device,
+            )  # [B, C, L]
+            keep = keep > self.dropout_prob  # [B, C, L]
+            observed_signal = observed_signal * keep  # [B, C, L]
+
+        if self.gap_prob > 0 and self.gap_length > 0:
+            apply_gap = torch.rand(
+                (batch_size, channels),
+                generator=generator,
+                device=input_state.x.device,
+            )  # [B, C]
+            apply_gap = apply_gap < self.gap_prob  # [B, C]
+
+            max_start = seq_len - self.gap_length
+            if max_start < 0:
+                raise ValueError(
+                    f"gap_length {self.gap_length} exceeds seq_len {seq_len}."
+                )
+
+            gap_start = torch.randint(
+                0,
+                max_start + 1,
+                (batch_size, channels),
+                generator=generator,
+                device=input_state.x.device,
+            )  # [B, C]
+
+            time_idx = torch.arange(seq_len, device=input_state.x.device)  # [L]
+            in_gap = (time_idx[None, None, :] >= gap_start[:, :, None]) & (
+                time_idx[None, None, :] < gap_start[:, :, None] + self.gap_length
+            )  # [B, C, L]
+            gap_mask = ~(apply_gap[:, :, None] & in_gap)  # [B, C, L]
+            observed_signal = observed_signal * gap_mask  # [B, C, L]
+
+        if self.hold_prob > 0:
+            hold_mask = torch.rand(
+                (batch_size, channels, seq_len),
+                generator=generator,
+                device=input_state.x.device,
+            )  # [B, C, L]
+            hold_mask = hold_mask < self.hold_prob  # [B, C, L]
+            previous = torch.cat(
+                [observed_signal[:, :, :1], observed_signal[:, :, :-1]],
+                dim=2,
+            )  # [B, C, L]
+            observed_signal = torch.where(hold_mask, previous, observed_signal)  # [B, C, L]
+
+        meta = {
+            "view": "MissingnessView",
+            "seed": seed,
+            "dropout_prob": self.dropout_prob,
+            "gap_prob": self.gap_prob,
+            "gap_length": self.gap_length,
+            "hold_prob": self.hold_prob,
+            "process": process_meta,
+        }
+        return Observation(x=observed_signal, y=input_state.y, meta=meta)
