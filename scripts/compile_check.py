@@ -25,7 +25,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--device", choices=["cpu", "cuda"], required=True)
     parser.add_argument("--batch-size", type=int, required=True)
     parser.add_argument("--seq-len", type=int, required=True)
-    parser.add_argument("--num-pulses", type=int)
+    parser.add_argument("--frequency-hz", type=float)
+    parser.add_argument("--sample-rate-hz", type=float)
     parser.add_argument("--components", type=int)
     parser.add_argument("--seed", type=int, required=True)
     return parser.parse_args()
@@ -43,16 +44,20 @@ def _build_pipeline(
     process_name: str,
     device: torch.device,
     seq_len: int,
-    num_pulses: int | None,
+    frequency_hz: float | None,
+    sample_rate_hz: float | None,
     components: int | None,
 ) -> SynthPipeline:
     if process_name == "pulse":
-        if num_pulses is None:
-            raise ValueError("--num-pulses is required for process=pulse.")
+        if frequency_hz is None:
+            raise ValueError("--frequency-hz is required for process=pulse.")
+        if sample_rate_hz is None:
+            raise ValueError("--sample-rate-hz is required for process=pulse.")
 
         process = PulseTrainProcess(
             seq_len=seq_len,
-            num_pulses=num_pulses,
+            frequency_hz=frequency_hz,
+            sample_rate_hz=sample_rate_hz,
             rhythm_classes=["regular", "irregular", "missed_beat"],
             shape_classes=["gaussian", "sharp_laplace", "biphasic_dog"],
             latent_mode="pqrst3",
@@ -115,7 +120,8 @@ def main() -> None:
         process_name=args.process,
         device=device,
         seq_len=args.seq_len,
-        num_pulses=args.num_pulses,
+        frequency_hz=args.frequency_hz,
+        sample_rate_hz=args.sample_rate_hz,
         components=args.components,
     )
 

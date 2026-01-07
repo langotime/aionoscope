@@ -69,7 +69,8 @@ from toyts.processes.pulse_train import PulseTrainProcess
 
 process = PulseTrainProcess(
     seq_len=1024,
-    num_pulses=10,
+    frequency_hz=1.2,
+    sample_rate_hz=250.0,
     rhythm_classes=["regular", "irregular", "missed_beat"],
     shape_classes=["gaussian", "sharp_laplace", "biphasic_dog"],
     latent_mode="pqrst3",
@@ -77,7 +78,7 @@ process = PulseTrainProcess(
 )
 ```
 
-This process will generate a signal of length 1024 with 10 pulses. The pulses can have different rhythms and shapes, and the underlying latent signal will have 3 components (P, QRS, T).
+This process will generate a signal of length 1024 sampled at 250 Hz with a ~1.2 Hz pulse rate (~72 bpm). The pulses can have different rhythms and shapes, and the underlying latent signal will have 3 components (P, QRS, T).
 
 ### Step 2: Define the Views
 

@@ -20,7 +20,8 @@ def main() -> None:
     # 1. Define the Process
     process = PulseTrainProcess(
         seq_len=1024,
-        num_pulses=10,
+        frequency_hz=1.2,
+        sample_rate_hz=250.0,
         rhythm_classes=["regular", "irregular", "missed_beat"],
         shape_classes=["gaussian", "sharp_laplace", "biphasic_dog"],
         latent_mode="pqrst3",

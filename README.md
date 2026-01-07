@@ -39,9 +39,10 @@ from toyts.core import SynthPipeline
 # Generates ECG-like pulses with specific rhythm and shape classes
 process = PulseTrainProcess(
     seq_len=2048,
-    num_pulses=8,
+    frequency_hz=1.95,
+    sample_rate_hz=500.0,
     rhythm_classes=["regular", "irregular", "missed_beat"],
-    shape_classes=["gaussian", "sharp", "biphasic"],
+    shape_classes=["gaussian", "sharp_laplace", "biphasic_dog"],
     latent_mode="pqrst3"  # Generates 3 latent components (P, QRS, T)
 )
 

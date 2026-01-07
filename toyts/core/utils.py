@@ -4,6 +4,7 @@ from typing import Any
 
 import torch
 
+from .rng import rng_make_generator
 from .types import LatentState, Observation
 
 
@@ -36,6 +37,28 @@ def utils_make_canonical_A0(num_leads: int, num_latent: int) -> torch.Tensor:
     lead_grid = torch.linspace(0.1, 1.0, steps=num_leads)[:, None]  # [C, 1]
     latent_grid = torch.linspace(1.0, 0.5, steps=num_latent)[None, :]  # [1, K]
     mixing_matrix = torch.cos(lead_grid * latent_grid * torch.pi)  # [C, K]
+    return mixing_matrix
+
+
+def utils_make_random_A0(
+    num_leads: int,
+    num_latent: int,
+    *,
+    rng: torch.Generator,
+    device: torch.device,
+) -> torch.Tensor:
+    if num_leads <= 0 or num_latent <= 0:
+        raise ValueError("num_leads and num_latent must be positive.")
+    if rng is None:
+        raise ValueError("rng must be provided to generate random A0.")
+
+    generator, _, _ = rng_make_generator(rng=rng, device=device)
+    mixing_matrix = torch.randn(
+        (num_leads, num_latent),
+        generator=generator,
+        device=device,
+        dtype=torch.float32,
+    )  # [C, K]
     return mixing_matrix
 
 

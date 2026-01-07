@@ -10,7 +10,8 @@ def test_shortcut_baseline_on_rhythm() -> None:
 
     process = PulseTrainProcess(
         seq_len=512,
-        num_pulses=8,
+        frequency_hz=8.0,
+        sample_rate_hz=511.0,
         rhythm_classes=["regular", "irregular", "missed_beat"],
         shape_classes=["gaussian", "sharp_laplace", "biphasic_dog"],
         latent_mode="pqrst3",

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 import torch
 from torch import nn
 
@@ -21,7 +23,9 @@ class PulseTrainProcess(nn.Module):
 
     Args:
         seq_len: The length of the generated sequence `L`.
-        num_pulses: The number of pulses `N` to generate within the sequence.
+        frequency_hz: The pulse frequency in Hz. The actual pulse count is
+            `round(frequency_hz * duration_sec)`.
+        sample_rate_hz: The sampling rate used to interpret `seq_len` in seconds.
         rhythm_classes: A list of rhythm types to sample from. Must include
             "regular", "irregular", and "missed_beat".
         shape_classes: A list of pulse shape types to sample from. Must include
@@ -38,7 +42,8 @@ class PulseTrainProcess(nn.Module):
         self,
         *,
         seq_len: int,
-        num_pulses: int,
+        frequency_hz: float,
+        sample_rate_hz: float,
         rhythm_classes: list[str],
         shape_classes: list[str],
         latent_mode: str,
@@ -49,8 +54,10 @@ class PulseTrainProcess(nn.Module):
 
         if seq_len <= 0:
             raise ValueError(f"seq_len must be positive, got {seq_len}.")
-        if num_pulses <= 0:
-            raise ValueError(f"num_pulses must be positive, got {num_pulses}.")
+        if frequency_hz <= 0:
+            raise ValueError(f"frequency_hz must be positive, got {frequency_hz}.")
+        if sample_rate_hz <= 0:
+            raise ValueError(f"sample_rate_hz must be positive, got {sample_rate_hz}.")
         if not rhythm_classes:
             raise ValueError("rhythm_classes must be non-empty.")
         if not shape_classes:
@@ -82,6 +89,19 @@ class PulseTrainProcess(nn.Module):
             )
 
         self.seq_len = seq_len
+        duration_sec = (seq_len - 1) / sample_rate_hz
+        expected_pulses = frequency_hz * duration_sec
+        num_pulses = int(math.floor(expected_pulses + 0.5))
+        if num_pulses <= 0:
+            raise ValueError(
+                "frequency_hz and sample_rate_hz yield fewer than 1 pulse "
+                f"for seq_len={seq_len}. "
+                f"Got duration_sec={duration_sec:.6f}, expected_pulses={expected_pulses:.6f}."
+            )
+
+        self.frequency_hz = frequency_hz
+        self.sample_rate_hz = sample_rate_hz
+        self.duration_sec = duration_sec
         self.num_pulses = num_pulses
         self.rhythm_classes = list(rhythm_classes)
         self.shape_classes = list(shape_classes)
@@ -190,7 +210,15 @@ class PulseTrainProcess(nn.Module):
 
         # Convert intervals to absolute center locations
         centers_normalized = intervals.cumsum(dim=1)[:, :-1]  # [B, N]
+        phase_offset = torch.rand(
+            (batch_size, 1),
+            generator=generator,
+            device=device,
+        )  # [B, 1]
+        centers_normalized = (centers_normalized + phase_offset) % 1.0  # [B, N]
+        centers_normalized, _ = centers_normalized.sort(dim=1)  # [B, N]
         centers = centers_normalized * (self.seq_len - 1)  # [B, N]
+        phase_offset_samples = phase_offset * (self.seq_len - 1)  # [B, 1]
 
         # --- Generate latent PQRST components ---
         time_grid = torch.linspace(
@@ -264,11 +292,15 @@ class PulseTrainProcess(nn.Module):
             "process": "PulseTrainProcess",
             "seed": seed,
             "seq_len": self.seq_len,
+            "frequency_hz": self.frequency_hz,
+            "sample_rate_hz": self.sample_rate_hz,
+            "duration_sec": self.duration_sec,
             "num_pulses": self.num_pulses,
             "latent_mode": self.latent_mode,
             "shape_names": self.shape_classes,
             "rhythm_names": self.rhythm_classes,
             "spacing_samples": spacing,
+            "phase_offset_samples": phase_offset_samples,
         }
 
         return LatentState(centers=centers, latent=latent, y=y, meta=meta)

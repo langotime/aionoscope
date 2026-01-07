@@ -17,7 +17,8 @@ def test_pulse_train_shapes() -> None:
 
     process = PulseTrainProcess(
         seq_len=512,
-        num_pulses=6,
+        frequency_hz=6.0,
+        sample_rate_hz=511.0,
         rhythm_classes=["regular", "irregular", "missed_beat"],
         shape_classes=["gaussian", "sharp_laplace", "biphasic_dog"],
         latent_mode="pqrst3",

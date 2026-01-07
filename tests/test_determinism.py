@@ -16,7 +16,8 @@ def test_determinism_pulse_train() -> None:
 
     process = PulseTrainProcess(
         seq_len=256,
-        num_pulses=4,
+        frequency_hz=4.0,
+        sample_rate_hz=255.0,
         rhythm_classes=["regular", "irregular", "missed_beat"],
         shape_classes=["gaussian", "sharp_laplace", "biphasic_dog"],
         latent_mode="pqrst3",
