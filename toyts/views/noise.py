@@ -11,6 +11,15 @@ from .base import View
 
 
 class NoiseView(View):
+    """A view that adds Gaussian noise to an observation.
+
+    This module applies simple additive white Gaussian noise (AWGN) to the
+    input signal.
+
+    Args:
+        noise_std: The standard deviation of the Gaussian noise to add.
+    """
+
     def __init__(self, *, noise_std: float) -> None:
         super().__init__()
         if noise_std < 0:
@@ -23,6 +32,18 @@ class NoiseView(View):
         *,
         rng: torch.Generator | None = None,
     ) -> Observation:
+        """Apply additive Gaussian noise.
+
+        This method expects an `Observation` as input.
+
+        Args:
+            input_state: An `Observation` object.
+            rng: An optional `torch.Generator` for reproducibility.
+
+        Returns:
+            An `Observation` object where `x` is the noisy signal, with the
+            same shape as the input `[B, C, L]`.
+        """
         if isinstance(input_state, LatentState):
             raise TypeError("NoiseView expects an Observation, got LatentState.")
 
@@ -45,6 +66,20 @@ class NoiseView(View):
 
 
 class BaselineWanderView(View):
+    """A view that adds low-frequency sinusoidal noise (baseline wander).
+
+    This module simulates baseline wander by adding a separate sine wave to each
+    channel of the input signal. The amplitude, frequency, and phase of the
+    sine wave are randomized for each channel.
+
+    Args:
+        amplitude_std: The standard deviation of the amplitude of the sine wave.
+            The actual amplitude is sampled from a standard normal distribution
+            and scaled by this value.
+        freq_min: The minimum frequency of the sine wave.
+        freq_max: The maximum frequency of the sine wave.
+    """
+
     def __init__(
         self,
         *,
@@ -70,6 +105,18 @@ class BaselineWanderView(View):
         *,
         rng: torch.Generator | None = None,
     ) -> Observation:
+        """Apply baseline wander.
+
+        This method expects an `Observation` as input.
+
+        Args:
+            input_state: An `Observation` object.
+            rng: An optional `torch.Generator` for reproducibility.
+
+        Returns:
+            An `Observation` object where `x` is the signal with baseline
+            wander, with the same shape as the input `[B, C, L]`.
+        """
         if isinstance(input_state, LatentState):
             raise TypeError("BaselineWanderView expects an Observation, got LatentState.")
 
@@ -80,6 +127,7 @@ class BaselineWanderView(View):
         time_grid = torch.linspace(0, 1, steps=seq_len, device=input_state.x.device)  # [L]
         time_grid = time_grid[None, None, :]  # [1, 1, L]
 
+        # Sample frequency, phase, and amplitude for each channel
         freq = torch.rand(
             (batch_size, channels, 1),
             generator=generator,
@@ -101,6 +149,7 @@ class BaselineWanderView(View):
         )  # [B, C, 1]
         amplitude = amplitude * self.amplitude_std  # [B, C, 1]
 
+        # Create and add the baseline wander
         baseline = amplitude * torch.sin(2.0 * math.pi * freq * time_grid + phase)  # [B, C, L]
         observed_signal = input_state.x + baseline  # [B, C, L]
 
@@ -116,12 +165,31 @@ class BaselineWanderView(View):
 
 
 class NormalizeView(View):
+    """A view that normalizes the signal to have zero mean and unit variance.
+
+    This module performs channel-wise instance normalization. For each channel
+    in each sample of the batch, it subtracts the mean of that channel and
+    divides by its standard deviation.
+    """
+
     def forward(
         self,
         input_state: LatentState | Observation,
         *,
         rng: torch.Generator | None = None,
     ) -> Observation:
+        """Apply channel-wise normalization.
+
+        This method expects an `Observation` as input.
+
+        Args:
+            input_state: An `Observation` object.
+            rng: This parameter is ignored.
+
+        Returns:
+            An `Observation` object where `x` is the normalized signal, with
+            the same shape as the input `[B, C, L]`.
+        """
         if isinstance(input_state, LatentState):
             raise TypeError("NormalizeView expects an Observation, got LatentState.")
 
@@ -129,8 +197,10 @@ class NormalizeView(View):
         mean = input_state.x.mean(dim=-1, keepdim=True)  # [B, C, 1]
         std = input_state.x.std(dim=-1, keepdim=True, unbiased=False)  # [B, C, 1]
         if torch.any(std <= 0):
+            # Add a small epsilon for numerical stability if needed, or raise.
+            # For synthetic data, std should ideally not be zero.
             raise ValueError("NormalizeView requires positive std for normalization.")
-        observed_signal = (input_state.x - mean) / std  # [B, C, L]
+        observed_signal = (input_state.x - mean) / (std + 1e-8)  # [B, C, L]
 
         meta = {
             "view": "NormalizeView",

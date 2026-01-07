@@ -10,6 +10,34 @@ from ..core.types import LatentState
 
 
 class TrendSeasonAnomalyProcess(nn.Module):
+    """A process that generates a signal with trend, seasonality, and anomalies.
+
+    This module creates a synthetic time series by combining three main components:
+    1.  **Trend**: A linear trend, which can be flat ("steady") or have a
+        randomly sampled slope ("ramping").
+    2.  **Seasonality**: A sinusoidal wave with variable frequency, phase, and
+        amplitude. The amplitude can be boosted to create "spiky" seasons.
+    3.  **Anomalies**: Optional point anomalies, including spikes or drops,
+        implemented as Gaussian bumps.
+
+    Additional noisy components can be added to increase the latent dimension.
+
+    Args:
+        seq_len: The length of the generated sequence `L`.
+        components: The total number of latent components `K`. Must be at least 3.
+        regime_classes: A list of trend/seasonality regimes to sample from.
+            Defaults to ["steady", "ramping", "spiky"].
+        anomaly_classes: A list of anomaly types to sample from.
+            Defaults to ["none", "drop", "spike"].
+        slope_max: The maximum absolute slope for the "ramping" trend.
+        season_amp: The base amplitude for the seasonal component.
+        spiky_boost: The factor by which `season_amp` is multiplied for the
+            "spiky" regime.
+        season_freq_min: The minimum frequency for the sinusoidal season.
+        season_freq_max: The maximum frequency for the sinusoidal season.
+        anomaly_scale: The base scale for the amplitude of anomalies.
+    """
+
     def __init__(
         self,
         *,
@@ -72,11 +100,26 @@ class TrendSeasonAnomalyProcess(nn.Module):
         *,
         rng: torch.Generator | None = None,
     ) -> LatentState:
+        """Generate a batch of time series with trend, seasonality, and anomalies.
+
+        Args:
+            batch_size: The number of samples to generate `B`.
+            device: The torch device to use for generation.
+            rng: An optional `torch.Generator` for reproducibility.
+
+        Returns:
+            A `LatentState` object containing:
+            - `centers`: An empty tensor, as this process doesn't have discrete events.
+            - `latent`: The generated signal with components `[B, K, L]`.
+            - `y`: A dictionary with "regime" `[B]` and "anomaly_type" `[B]` labels.
+            - `meta`: A dictionary with generation parameters.
+        """
         if batch_size <= 0:
             raise ValueError(f"batch_size must be positive, got {batch_size}.")
 
         generator, seed, _ = rng_make_generator(rng=rng, device=device)
 
+        # Sample regime and anomaly type for each item in the batch
         regime_idx = torch.randint(
             0,
             len(self.regime_classes),
@@ -95,6 +138,7 @@ class TrendSeasonAnomalyProcess(nn.Module):
         time_grid = torch.linspace(0, 1, steps=self.seq_len, device=device)  # [L]
         time_grid = time_grid[None, None, :]  # [1, 1, L]
 
+        # --- Generate Trend Component ---
         slope = torch.zeros(batch_size, device=device)  # [B]
         ramp_mask = (regime_idx == self._ramping_index)  # [B]
         slope_noise = torch.rand(
@@ -112,6 +156,7 @@ class TrendSeasonAnomalyProcess(nn.Module):
         )  # [B]
         trend = (slope[:, None, None] * (time_grid - 0.5)) + offset[:, None, None]  # [B, 1, L]
 
+        # --- Generate Seasonal Component ---
         freq = torch.rand(
             (batch_size,),
             generator=generator,
@@ -133,6 +178,7 @@ class TrendSeasonAnomalyProcess(nn.Module):
             2.0 * math.pi * freq[:, None, None] * time_grid + phase[:, None, None]
         )  # [B, 1, L]
 
+        # --- Generate Anomaly Component ---
         anomaly_amp = torch.zeros(batch_size, device=device)  # [B]
         spike_mask = (anomaly_idx == self._spike_index)  # [B]
         drop_mask = (anomaly_idx == self._drop_index)  # [B]
@@ -158,6 +204,7 @@ class TrendSeasonAnomalyProcess(nn.Module):
             -0.5 * ((time_grid - anomaly_center) / anomaly_sigma).pow(2)
         )  # [B, 1, L]
 
+        # --- Combine components into latent tensor ---
         latent = torch.zeros(
             (batch_size, self.components, self.seq_len),
             device=device,
@@ -166,6 +213,7 @@ class TrendSeasonAnomalyProcess(nn.Module):
         latent[:, 1:2, :] = season
         latent[:, 2:3, :] = anomaly
 
+        # Add extra noise components if K > 3
         if self.components > 3:
             extra_noise = torch.randn(
                 (batch_size, self.components - 3, self.seq_len),

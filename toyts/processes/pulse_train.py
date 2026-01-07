@@ -9,6 +9,31 @@ from ..kernels.morph import morph_dog, morph_gaussian, morph_laplace
 
 
 class PulseTrainProcess(nn.Module):
+    """A process that generates a train of pulses with varying shapes and rhythms.
+
+    This module simulates a quasi-periodic signal composed of multiple pulses. It
+    allows for controlling the pulse shape (e.g., Gaussian, Laplace), rhythm
+    (regular, irregular, missed beats), and the underlying latent structure,
+    making it suitable for simulating signals like ECGs.
+
+    The latent representation is structured as a "PQRST" complex with 3
+    components, where the main "QRS" component can have its shape varied.
+
+    Args:
+        seq_len: The length of the generated sequence `L`.
+        num_pulses: The number of pulses `N` to generate within the sequence.
+        rhythm_classes: A list of rhythm types to sample from. Must include
+            "regular", "irregular", and "missed_beat".
+        shape_classes: A list of pulse shape types to sample from. Must include
+            "gaussian", "sharp_laplace", and "biphasic_dog".
+        latent_mode: The structure of the latent components. Currently, only
+            "pqrst3" is supported.
+        amplitude: The target amplitude to which the generated latent signal
+            is normalized.
+        missed_gap_factor: In the "missed_beat" rhythm, the factor by which the
+            interval is increased to simulate a pause. Must be > 1.
+    """
+
     def __init__(
         self,
         *,
@@ -87,11 +112,26 @@ class PulseTrainProcess(nn.Module):
         *,
         rng: torch.Generator | None = None,
     ) -> LatentState:
+        """Generate a batch of pulse trains.
+
+        Args:
+            batch_size: The number of samples to generate `B`.
+            device: The torch device to use for generation.
+            rng: An optional `torch.Generator` for reproducibility.
+
+        Returns:
+            A `LatentState` object containing:
+            - `centers`: The temporal locations of each pulse `[B, N]`.
+            - `latent`: The generated PQRST signal `[B, K, L]`.
+            - `y`: A dictionary with "shape" `[B]` and "rhythm" `[B]` labels.
+            - `meta`: A dictionary with generation parameters.
+        """
         if batch_size <= 0:
             raise ValueError(f"batch_size must be positive, got {batch_size}.")
 
         generator, seed, _ = rng_make_generator(rng=rng, device=device)
 
+        # Sample shape and rhythm for each item in the batch
         shape_idx = torch.randint(
             0,
             len(self.shape_classes),
@@ -107,6 +147,7 @@ class PulseTrainProcess(nn.Module):
             device=device,
         )  # [B]
 
+        # --- Generate intervals between pulses ---
         base_interval = 1.0 / (self.num_pulses + 1)
         base_intervals = torch.full(
             (batch_size, self.num_pulses + 1),
@@ -120,6 +161,7 @@ class PulseTrainProcess(nn.Module):
         )  # [B, N+1]
         random_intervals = random_intervals / random_intervals.sum(dim=1, keepdim=True)  # [B, N+1]
 
+        # Create intervals for the "missed beat" case
         missed_indices = torch.randint(
             0,
             self.num_pulses + 1,
@@ -139,15 +181,18 @@ class PulseTrainProcess(nn.Module):
         missed_intervals = base_intervals * missed_multipliers  # [B, N+1]
         missed_intervals = missed_intervals / missed_intervals.sum(dim=1, keepdim=True)  # [B, N+1]
 
+        # Select intervals based on the sampled rhythm
         intervals = base_intervals  # [B, N+1]
         irregular_mask = (rhythm_idx == self._irregular_index)  # [B]
         missed_mask = (rhythm_idx == self._missed_index)  # [B]
         intervals = torch.where(irregular_mask[:, None], random_intervals, intervals)  # [B, N+1]
         intervals = torch.where(missed_mask[:, None], missed_intervals, intervals)  # [B, N+1]
 
+        # Convert intervals to absolute center locations
         centers_normalized = intervals.cumsum(dim=1)[:, :-1]  # [B, N]
         centers = centers_normalized * (self.seq_len - 1)  # [B, N]
 
+        # --- Generate latent PQRST components ---
         time_grid = torch.linspace(
             0,
             self.seq_len - 1,
@@ -156,22 +201,28 @@ class PulseTrainProcess(nn.Module):
         )  # [L]
         spacing = (self.seq_len - 1) / (self.num_pulses + 1)
 
+        # P, QRS, T component parameters (relative offsets, widths, and amplitudes)
         offsets = torch.tensor(self._offset_fractions, device=device) * spacing  # [K]
         sigmas = torch.tensor(self._sigma_fractions, device=device) * spacing  # [K]
         weights = torch.tensor(self._component_weights, device=device)  # [K]
 
+        # Create latent components for all pulses
         centers_k = centers[:, :, None] + offsets[None, None, :]  # [B, N, K]
         relative = time_grid[None, None, None, :] - centers_k[..., None]  # [B, N, K, L]
 
+        # Base Gaussian shape for all components
         sigma_grid = sigmas[None, None, :, None]  # [1, 1, K, 1]
         gaussian = morph_gaussian(relative_t=relative, sigma=sigma_grid)  # [B, N, K, L]
 
+        # --- Modify the QRS component shape based on the sampled class ---
         qrs_relative = relative[:, :, 1:2, :]  # [B, N, 1, L]
         qrs_gaussian = gaussian[:, :, 1:2, :]  # [B, N, 1, L]
 
+        # Peaked Laplace shape
         laplace_scale = sigmas[1] * self._laplace_scale  # []
         qrs_laplace = morph_laplace(relative_t=qrs_relative, scale=laplace_scale)  # [B, N, 1, L]
 
+        # Biphasic Difference-of-Gaussians shape
         dog_sigma1 = sigmas[1] * self._dog_sigma1  # []
         dog_sigma2 = sigmas[1] * self._dog_sigma2  # []
         dog_alpha = torch.tensor(self._dog_alpha, device=device)  # []
@@ -182,6 +233,7 @@ class PulseTrainProcess(nn.Module):
             alpha=dog_alpha,
         )  # [B, N, 1, L]
 
+        # Select the QRS shape
         laplace_mask = (shape_idx == self._laplace_index)[:, None, None, None]  # [B, 1, 1, 1]
         dog_mask = (shape_idx == self._dog_index)[:, None, None, None]  # [B, 1, 1, 1]
 
@@ -189,13 +241,16 @@ class PulseTrainProcess(nn.Module):
         qrs = torch.where(laplace_mask, qrs_laplace, qrs)  # [B, N, 1, L]
         qrs = torch.where(dog_mask, qrs_dog, qrs)  # [B, N, 1, L]
 
+        # Re-assemble the P, QRS, T components
         components = gaussian  # [B, N, K, L]
         components[:, :, 1:2, :] = qrs
         components = components * weights[None, None, :, None]  # [B, N, K, L]
 
+        # Sum pulses over the time dimension to get the final latent signal
         latent = components.sum(dim=1)  # [B, K, L]
         latent = latent - latent.mean(dim=-1, keepdim=True)  # [B, K, L]
 
+        # Normalize to target amplitude
         energy = latent.pow(2).mean(dim=(1, 2), keepdim=True).sqrt()  # [B, 1, 1]
         if torch.any(energy <= 0):
             raise ValueError("Latent energy must be positive for normalization.")

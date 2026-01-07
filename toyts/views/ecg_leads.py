@@ -10,6 +10,28 @@ from .base import View
 
 
 class ECGLeadsView(View):
+    """A view that simulates ECG leads by mixing latent components.
+
+    This view transforms a `LatentState` into an `Observation` by performing a
+    linear combination of the latent components `K` to produce a multi-channel
+    signal `C` (the "leads").
+
+    The transformation involves:
+    1.  **Mixing**: A base mixing matrix `A0` of shape `[C, K]` is used.
+    2.  **Jitter**: Optional random noise is added to `A0` for each sample in
+        the batch, creating a batch-specific mixing matrix `A`.
+    3.  **Delay**: Each channel `C` can be randomly time-shifted by a maximum
+        delay, simulating conduction delays.
+
+    Args:
+        A0: The base mixing matrix `[C, K]` that maps latent components to
+            observed channels.
+        jitter_std: The standard deviation of the Gaussian noise added to the
+            mixing matrix for each sample. If 0, no jitter is applied.
+        max_delay: The maximum integer delay (positive or negative) to be
+            applied independently to each channel. If 0, no delay is applied.
+    """
+
     def __init__(
         self,
         *,
@@ -36,6 +58,18 @@ class ECGLeadsView(View):
         *,
         rng: torch.Generator | None = None,
     ) -> Observation:
+        """Apply the ECG leads simulation.
+
+        This method expects a `LatentState` with a non-None `latent` tensor.
+
+        Args:
+            input_state: A `LatentState` object.
+            rng: An optional `torch.Generator` for reproducibility.
+
+        Returns:
+            An `Observation` object where `x` is the mixed and delayed
+            multi-channel signal of shape `[B, C, L]`.
+        """
         latent_state = utils_require_latent(input_state, name="ECGLeadsView")
         if latent_state.latent is None:
             raise ValueError("ECGLeadsView requires LatentState.latent to be present.")
@@ -52,6 +86,7 @@ class ECGLeadsView(View):
 
         generator, seed, _ = rng_make_generator(rng=rng, device=device)
 
+        # --- Apply Mixing Matrix Jitter ---
         if self.jitter_std > 0:
             jitter = torch.randn(
                 (batch_size, self.A0.shape[0], latent_channels),
@@ -62,14 +97,17 @@ class ECGLeadsView(View):
         else:
             mixing_matrix = self.A0[None, :, :].expand(batch_size, -1, -1)  # [B, C, K]
 
+        # --- Mix latent components into observed channels ---
         observed_signal = torch.einsum(
             "bck,bkl->bcl",
             mixing_matrix,
             latent_signal,
         )  # [B, C, L]
 
+        # --- Apply Channel-wise Delays ---
         delays = torch.zeros((batch_size, self.A0.shape[0]), device=device, dtype=torch.int64)  # [B, C]
         if self.max_delay > 0:
+            # Sample random delays for each channel in the batch
             delays = torch.randint(
                 -self.max_delay,
                 self.max_delay + 1,
@@ -78,6 +116,7 @@ class ECGLeadsView(View):
                 device=device,
             )  # [B, C]
 
+            # Create shifted time indices and gather
             time_idx = torch.arange(seq_len, device=device)  # [L]
             shifted_idx = (time_idx[None, None, :] - delays[:, :, None]).clamp(0, seq_len - 1)  # [B, C, L]
             shifted_idx = shifted_idx.to(torch.int64)  # [B, C, L]

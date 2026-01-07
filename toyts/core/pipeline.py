@@ -21,6 +21,18 @@ def _wrap_view(view: nn.Module) -> View:
 
 
 class SynthPipeline(nn.Module):
+    """A pipeline that synthesizes observations from a latent process and a set of views.
+
+    This module orchestrates the generation of synthetic data by first invoking a
+    `Process` module to create a latent state, and then passing that latent state
+    through one or more `View` modules to generate observations. It handles the
+
+    Args:
+        process: A `Process` module that generates the latent state.
+        views: A dictionary of `View` or `nn.Sequential` modules. Each entry
+            represents a named "view" of the data (e.g., "clean", "noisy").
+    """
+
     def __init__(self, process: Process, views: dict[str, nn.Module]):
         super().__init__()
 
@@ -37,6 +49,19 @@ class SynthPipeline(nn.Module):
         device: torch.device,
         rng: torch.Generator | None = None,
     ) -> dict[str, Observation]:
+        """Generate a batch of synthetic observations.
+
+        Args:
+            batch_size: The number of samples to generate.
+            device: The torch device to use for generation.
+            rng: An optional `torch.Generator` for reproducibility. If `None`, a
+                new generator is created with a time-based seed.
+
+        Returns:
+            A dictionary where keys are view names and values are `Observation`
+            objects. Each observation contains the synthesized signal `x` of
+            shape `[B, C, L]`, along with labels and metadata.
+        """
         generator, seed, _ = rng_make_generator(rng=rng, device=device)
         child_generators = rng_split(
             rng=generator,

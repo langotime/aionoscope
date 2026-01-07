@@ -72,5 +72,3 @@ labels = batch["clean"].y        # {"rhythm": [64], "shape": [64]}
 *   `toyts.processes`: Latent generators (e.g., `PulseTrain`, `TrendSeasonAnomaly`).
 *   `toyts.views`: Observation transforms (e.g., `ECGLeads`, `Units`, `Sampling`, `Missingness`).
 *   `toyts.kernels`: Signal morphology kernels.
-
-See `toyts/plans/0_initial.md` for the full design roadmap.

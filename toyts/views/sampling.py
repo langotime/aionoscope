@@ -8,6 +8,20 @@ from .base import View
 
 
 class SamplingAggregationView(View):
+    """A view that downsamples or aggregates the signal over time.
+
+    This module changes the temporal resolution of the signal. It supports three modes:
+    1.  **"downsample"**: Selects every `stride`-th data point.
+    2.  **"mean"**: Computes the mean over non-overlapping windows of size `window`.
+    3.  **"max"**: Computes the max over non-overlapping windows of size `window`.
+
+    Args:
+        mode: The operation to perform. One of "downsample", "mean", or "max".
+        stride: The step size for "downsample" mode. Must be a positive integer.
+        window: The window size for "mean" and "max" modes. The sequence length
+            must be divisible by the window size.
+    """
+
     def __init__(
         self,
         *,
@@ -29,6 +43,18 @@ class SamplingAggregationView(View):
         *,
         rng: torch.Generator | None = None,
     ) -> Observation:
+        """Apply the sampling or aggregation transformation.
+
+        This method expects an `Observation` as input.
+
+        Args:
+            input_state: An `Observation` object.
+            rng: This parameter is ignored.
+
+        Returns:
+            An `Observation` object with the transformed signal `x`. The shape
+            will be `[B, C, L']`, where `L'` is the new sequence length.
+        """
         if isinstance(input_state, LatentState):
             raise TypeError("SamplingAggregationView expects an Observation, got LatentState.")
 
@@ -47,6 +73,7 @@ class SamplingAggregationView(View):
             }
             return Observation(x=observed_signal, y=input_state.y, meta=meta)
 
+        # --- Aggregation Modes ("mean", "max") ---
         if self.window is None or self.window <= 0:
             raise ValueError("window must be a positive integer for aggregation modes.")
         if seq_len % self.window != 0:
@@ -54,6 +81,7 @@ class SamplingAggregationView(View):
                 f"seq_len {seq_len} must be divisible by window {self.window} for aggregation."
             )
 
+        # Reshape to create non-overlapping windows
         reshaped_signal = input_state.x.view(
             batch_size,
             channels,
@@ -63,7 +91,7 @@ class SamplingAggregationView(View):
 
         if self.mode == "mean":
             observed_signal = reshaped_signal.mean(dim=-1)  # [B, C, L']
-        else:
+        else:  # self.mode == "max"
             observed_signal = reshaped_signal.max(dim=-1).values  # [B, C, L']
 
         meta = {

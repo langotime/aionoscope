@@ -9,6 +9,24 @@ from .base import View
 
 
 class MissingnessView(View):
+    """A view that introduces various forms of missing data into an observation.
+
+    This module simulates common data corruption issues by applying one or more
+    of the following transformations to an `Observation`:
+    1.  **Dropout**: Randomly sets individual data points to zero.
+    2.  **Gaps**: Sets a continuous segment of data points in a channel to zero.
+    3.  **Hold**: Replaces a data point with the value from the previous time step.
+
+    These operations are applied independently and in sequence.
+
+    Args:
+        dropout_prob: The probability of setting a single data point to zero.
+        gap_prob: The probability of introducing a zero-gap in a given channel.
+        gap_length: The length of the zero-gap, if one is introduced.
+        hold_prob: The probability of replacing a data point with its previous
+            value (sample-and-hold).
+    """
+
     def __init__(
         self,
         *,
@@ -38,6 +56,18 @@ class MissingnessView(View):
         *,
         rng: torch.Generator | None = None,
     ) -> Observation:
+        """Apply missing data transformations.
+
+        This method expects an `Observation` as input.
+
+        Args:
+            input_state: An `Observation` object.
+            rng: An optional `torch.Generator` for reproducibility.
+
+        Returns:
+            An `Observation` object where `x` is the signal with missing data,
+            of the same shape as the input `[B, C, L]`.
+        """
         if isinstance(input_state, LatentState):
             raise TypeError("MissingnessView expects an Observation, got LatentState.")
 
@@ -46,15 +76,17 @@ class MissingnessView(View):
         observed_signal = input_state.x  # [B, C, L]
         batch_size, channels, seq_len = observed_signal.shape
 
+        # --- Apply Dropout ---
         if self.dropout_prob > 0:
-            keep = torch.rand(
+            keep_mask = torch.rand(
                 (batch_size, channels, seq_len),
                 generator=generator,
                 device=input_state.x.device,
             )  # [B, C, L]
-            keep = keep > self.dropout_prob  # [B, C, L]
-            observed_signal = observed_signal * keep  # [B, C, L]
+            keep_mask = keep_mask > self.dropout_prob  # [B, C, L]
+            observed_signal = observed_signal * keep_mask  # [B, C, L]
 
+        # --- Apply Gaps ---
         if self.gap_prob > 0 and self.gap_length > 0:
             apply_gap = torch.rand(
                 (batch_size, channels),
@@ -69,6 +101,7 @@ class MissingnessView(View):
                     f"gap_length {self.gap_length} exceeds seq_len {seq_len}."
                 )
 
+            # Sample a start time for the gap in each channel
             gap_start = torch.randint(
                 0,
                 max_start + 1,
@@ -77,6 +110,7 @@ class MissingnessView(View):
                 device=input_state.x.device,
             )  # [B, C]
 
+            # Create a mask to zero out the gap region
             time_idx = torch.arange(seq_len, device=input_state.x.device)  # [L]
             in_gap = (time_idx[None, None, :] >= gap_start[:, :, None]) & (
                 time_idx[None, None, :] < gap_start[:, :, None] + self.gap_length
@@ -84,6 +118,7 @@ class MissingnessView(View):
             gap_mask = ~(apply_gap[:, :, None] & in_gap)  # [B, C, L]
             observed_signal = observed_signal * gap_mask  # [B, C, L]
 
+        # --- Apply Sample-and-Hold ---
         if self.hold_prob > 0:
             hold_mask = torch.rand(
                 (batch_size, channels, seq_len),
