@@ -46,6 +46,35 @@ This repo contains source code of the ToyTS library - PyTorch-native online synt
 - ALWAYS clean up temprorary files.
 - Use 'uv run python -m' to run python code to avoid module import errors. YOU MUST NOT use 'sys.path.insert'
 
+## Engineering Best Practices
+
+### Reproducibility
+- Always accept a torch.Generator (or seed) and use it for sampling.
+- Do not use global torch.manual_seed inside modules.
+- Write seed/parameters into meta so a specific batch can be reproduced.
+
+### Separation of responsibilities
+- Process is responsible for ground truth and labels.
+- View is responsible for presentation and measurement distortions.
+- Labels must not depend on view parameters unless explicitly testing robustness.
+
+### Performance
+- Avoid Python loops over B and N. Prefer broadcasting, einsum, or conv1d.
+- Cache t_grid as a buffer in modules.
+- Keep computations in float32 (or bfloat16 when needed), but treat noise/quantization carefully.
+- Avoid huge intermediate tensors [B,N,L] when N and L are large.
+- For pulse train, use impulse + conv1d (stage 3/optional) when possible.
+
+### Testability
+- Test shapes and dtype.
+- Test determinism with a fixed torch.Generator.
+- Test ranges after clipping and quantization.
+- Test for absence of shortcuts (baseline features should not give overly high accuracy).
+
+### Documentation and examples
+- Document each process and view: what it models, which parameters, expected invariances.
+- Keep minimal runnable scripts in examples/.
+
 ## Planning
 - Write plans to files in Markdown.
 - Put plans into the plans/ subridectory with a unique descriptive name and .md file type. Start each file name with "N_" prefix where N is a unique increasing counter.
