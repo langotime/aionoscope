@@ -31,6 +31,20 @@ def main() -> None:
     )
 
     A0 = utils_make_canonical_A0(num_leads=12, num_latent=3).to(device)  # [C, K]
+    lead_names = [
+        "I",
+        "II",
+        "III",
+        "aVR",
+        "aVL",
+        "aVF",
+        "V1",
+        "V2",
+        "V3",
+        "V4",
+        "V5",
+        "V6",
+    ]
 
     views = {
         "clean": ECGLeadsView(A0=A0, jitter_std=0.03, max_delay=3),
@@ -57,8 +71,27 @@ def main() -> None:
     fig, axes = plt.subplots(2, 2, figsize=(14, 8))
     fig.suptitle("ECG: clean vs noisy views and labels")
 
-    _plot_multilead(axes[0, 0], clean[0], "clean view")  # [C, L]
-    _plot_multilead(axes[0, 1], noisy[0], "noisy view")  # [C, L]
+    sample_idx = 0
+    clean_first = clean[sample_idx]  # [C, L]
+    noisy_first = noisy[sample_idx]  # [C, L]
+    shape_label_idx = int(shape_labels[sample_idx].item())
+    rhythm_label_idx = int(rhythm_labels[sample_idx].item())
+    shape_label = shape_names[shape_label_idx]
+    rhythm_label = rhythm_names[rhythm_label_idx]
+    sample_label = f"shape={shape_label}, rhythm={rhythm_label}"
+
+    _plot_multilead(
+        axes[0, 0],
+        clean_first,
+        f"clean view ({sample_label})",
+        lead_names,
+    )
+    _plot_multilead(
+        axes[0, 1],
+        noisy_first,
+        f"noisy view ({sample_label})",
+        lead_names,
+    )
     _plot_label_hist(axes[1, 0], shape_labels, shape_names, "shape labels")
     _plot_label_hist(axes[1, 1], rhythm_labels, rhythm_names, "rhythm labels")
 
@@ -77,9 +110,19 @@ def main() -> None:
     print("saved figure", output_path)
 
 
-def _plot_multilead(ax: plt.Axes, signal: torch.Tensor, title: str) -> None:
+def _plot_multilead(
+    ax: plt.Axes,
+    signal: torch.Tensor,
+    title: str,
+    lead_names: list[str],
+) -> None:
     signal_cpu = signal.detach().cpu()  # [C, L]
     num_leads, seq_len = signal_cpu.shape
+    if len(lead_names) != num_leads:
+        raise ValueError(
+            "lead_names must match the number of leads. "
+            f"Expected {num_leads}, got {len(lead_names)}."
+        )
 
     time_axis = torch.arange(seq_len)  # [L]
     time_values = time_axis.tolist()
@@ -91,6 +134,7 @@ def _plot_multilead(ax: plt.Axes, signal: torch.Tensor, title: str) -> None:
         lead_values = (signal_cpu[lead_idx] + offsets[lead_idx]).tolist()  # [L]
         ax.plot(time_values, lead_values, linewidth=0.8)
 
+    ax.set_yticks(offsets.tolist(), lead_names)
     ax.set_title(title)
     ax.set_xlabel("time")
     ax.set_ylabel("lead + offset")
