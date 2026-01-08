@@ -13,6 +13,19 @@ The core philosophy of ToyTS is the strict separation of the data-generating **P
 *   **GPU-Native**: The entire data generation pipeline is implemented in PyTorch, making it extremely fast and suitable for generating data on-the-fly during training, directly on the GPU.
 *   **Modular and Extensible**: The library is designed to be easily extensible. You can create your own custom `Process` and `View` modules to simulate a wide variety of time series data.
 
+## Avoiding Shortcuts (Anti-Cheating)
+
+A *shortcut* (or *cheat*) happens when a model can predict labels from non-causal, easy-to-exploit artifacts of the generator (e.g., padding patterns, noise level, resampling rate) instead of learning the intended underlying dynamics. Synthetic datasets are especially prone to this because it is easy to accidentally couple labels to nuisance parameters.
+
+Use the following rules when designing new `Process`/`View` components or composing datasets:
+
+1.  **Define labels from the latent process only**: Labels must come from the `Process` latent state and its own RNG/parameters, not from any `View` parameters or from the final observation tensor `x`.
+2.  **Keep views label-invariant by default**: Distributions of nuisance/view parameters (noise, quantization, clipping, missingness, sampling jitter, channel mixing, normalization, etc.) should be independent of `y` unless you are explicitly testing robustness to label-dependent shifts (and then document it).
+3.  **Avoid structural cues**: Keep tensor shapes and preprocessing identical across classes. Beware of variable-length sequences, padding values, masks, NaN counts, and view-specific metadata that can reveal the class.
+4.  **Avoid trivial global statistics**: If `y` becomes predictable from mean/DC offset, variance, energy, extrema, or similar cheap statistics, the task may be too easy or unintentionally leaking. Add nuisance variation so these statistics overlap across labels unless they are the intended signal.
+5.  **Treat `meta` as debug-only**: `meta` exists for reproducibility and analysis. Do not feed it into models. Avoid storing labels (or near-label proxies) in `meta` unless strictly necessary for debugging.
+6.  **Validate with shortcut checks**: Always run a sanity baseline (e.g., linear model on simple per-sample summary features) and a label-shuffle control. If performance is far above chance, inspect generator/view coupling and metadata for leakage.
+
 ## Core Concepts
 
 The library is built around a unidirectional data flow, which can be visualized as follows:

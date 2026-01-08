@@ -58,6 +58,14 @@ This repo contains source code of the ToyTS library - PyTorch-native online synt
 - View is responsible for presentation and measurement distortions.
 - Labels must not depend on view parameters unless explicitly testing robustness.
 
+### Anti-shortcut / anti-cheating
+- Labels must be a function of the latent process state only (and its own RNG/params), never of view parameters or observation artifacts.
+- View parameters (noise level, sampling rate, quantization, clipping, missingness, padding, channel order, etc.) must be sampled independently of labels by default; label-conditioned augmentation is allowed only when explicitly testing robustness and must be documented.
+- Keep tensor shapes and preprocessing identical across labels; avoid variable-length/padding patterns, masks, NaN counts, or other structural cues that correlate with `y`.
+- Avoid making `y` trivially recoverable from global statistics (mean/DC offset, variance, energy, max/min, number of spikes, etc.) unless the task is explicitly about those cues.
+- `meta` is for reproducibility/debugging only and must not be used as model input; do not store labels or near-label proxies in `meta` unless strictly needed for debugging (and clearly namespace/label them as debug-only).
+- When adding a new dataset/task, include a "shortcut check": a cheap baseline on simple per-sample stats should not reach suspiciously high accuracy; also run a label-shuffle control (accuracy ~ chance).
+
 ### Performance
 - Avoid Python loops over B and N. Prefer broadcasting, einsum, or conv1d.
 - Cache t_grid as a buffer in modules.
