@@ -45,6 +45,7 @@ This repo contains source code of the ToyTS library - PyTorch-native online synt
 ## Development Best Practices
 - ALWAYS clean up temprorary files.
 - Use 'uv run python -m' to run python code to avoid module import errors. YOU MUST NOT use 'sys.path.insert'
+- When updating examples, always keep `.py` scripts and matching `.ipynb` notebooks in sync.
 
 ## Engineering Best Practices
 
