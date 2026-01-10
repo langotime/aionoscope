@@ -70,6 +70,21 @@ The library is built around a unidirectional data flow, which can be visualized 
 
 5.  **SynthPipeline**: This module orchestrates the data generation. It takes a `Process` and a dictionary of `Views` and, when called, generates a batch of data containing all the requested views of the same underlying latent state.
 
+## Sampled Parameters in Meta
+
+Process-level sampled parameters that are not already present in outputs are stored under `LatentState.meta["samples"]`. This is a nested dictionary keyed by a process/node identifier (for example, `"TrendSeasonAnomalyProcess"` or `"EventTrainNode:events"`), with tensors for each sampled parameter.
+
+For views, sampled parameters live in `Observation.meta["views"]`. Large masks/noise are not stored; instead views expose helpers to regenerate them from seeds. For example, to re-create MissingnessView masks:
+
+```python
+miss_meta = observation.view_meta("MissingnessView")
+masks = MissingnessView.sample_masks(
+    miss_meta,
+    shape=observation.x.shape,
+    device=observation.x.device,
+)
+```
+
 ## Process Graphs and Branching Examples
 
 Process graphs allow non-linear composition, which is hard to express as a simple chain. Typical branching/merging use cases:

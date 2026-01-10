@@ -7,6 +7,8 @@ import torch
 from .rng import rng_make_generator
 from .types import LatentState, Observation
 
+SAMPLES_PREFIX = "__samples__"
+
 
 def utils_require_latent(z: LatentState | Observation, name: str) -> LatentState:
     """Return LatentState or raise a TypeError with context."""

@@ -3,6 +3,7 @@ from __future__ import annotations
 import torch
 
 from ..core.events import EventBatch, EventSchema
+from ..core.utils import SAMPLES_PREFIX
 from .graph import ProcessNode, ProcessState
 
 
@@ -276,6 +277,13 @@ class EventTrainNode(ProcessNode):
             dtype=torch.float32,
         )  # [B, N+1]
 
+        missed_indices = torch.full(
+            (state.batch_size,),
+            -1,
+            device=state.device,
+            dtype=torch.int64,
+        )  # [B]
+
         if self.mode == "regular":
             intervals = base_intervals  # [B, N+1]
         elif self.mode == "irregular":
@@ -354,9 +362,10 @@ class EventTrainNode(ProcessNode):
         state.data[self.out_key] = events
         state.data[self.centers_out_key] = centers
 
-        spacing = (self.seq_len - 1) / (self.num_events + 1)
-        state.meta["spacing_samples"] = spacing
-        state.meta["phase_offset_samples"] = phase_offset
+        samples_base = f"{SAMPLES_PREFIX}/EventTrainNode:{self.out_key}"
+        state.data[f"{samples_base}/intervals"] = intervals
+        state.data[f"{samples_base}/missed_indices"] = missed_indices
+        state.data[f"{samples_base}/phase_offset"] = phase_offset
         return state
 
 
@@ -590,7 +599,8 @@ class TimeJitterNode(ProcessNode):
             generator=rng,
             device=events.times.device,
         )  # [B, E]
-        jittered = events.times + noise * self.jitter_std  # [B, E]
+        time_jitter = noise * self.jitter_std  # [B, E]
+        jittered = events.times + time_jitter  # [B, E]
         state.data[self.out_key] = EventBatch(
             times=jittered,
             type_ids=events.type_ids,
@@ -599,6 +609,8 @@ class TimeJitterNode(ProcessNode):
             schema=events.schema,
             meta=events.meta,
         )
+        samples_base = f"{SAMPLES_PREFIX}/TimeJitterNode:{self.out_key}"
+        state.data[f"{samples_base}/time_jitter"] = time_jitter
         return state
 
 

@@ -9,6 +9,7 @@ from torch import nn
 from ..core.events import EventBatch, events_select
 from ..core.rng import rng_make_generator, rng_split
 from ..core.types import LatentState
+from ..core.utils import SAMPLES_PREFIX
 from .base import Process
 
 
@@ -353,6 +354,48 @@ class ProcessGraph(Process):
             raise ValueError("ProcessGraph outputs require 'events' but it is missing.")
         if "centers" in self.outputs and "centers" not in data:
             raise ValueError("ProcessGraph outputs require 'centers' but it is missing.")
+
+        sample_marker = f"{SAMPLES_PREFIX}/"
+        samples: dict[str, dict[str, Any]] = {}
+        for key, value in data.items():
+            sample_index = key.find(sample_marker)
+            if sample_index < 0:
+                continue
+            if sample_index != 0 and key[sample_index - 1] != ".":
+                raise ValueError(
+                    "Sample keys must start with '__samples__/' or be namespaced with '.'. "
+                    f"Got '{key}'."
+                )
+            namespace = key[: sample_index - 1] if sample_index > 0 else ""
+            sample_key = key[sample_index:]
+            parts = sample_key.split("/")
+            if len(parts) != 3 or parts[0] != SAMPLES_PREFIX:
+                raise ValueError(
+                    "Sample keys must follow '__samples__/node/param'. "
+                    f"Got '{key}'."
+                )
+            node_key, param = parts[1], parts[2]
+            if not node_key or not param:
+                raise ValueError(
+                    "Sample keys must include non-empty node and param names. "
+                    f"Got '{key}'."
+                )
+            if namespace:
+                node_key = f"{namespace}.{node_key}"
+            node_samples = samples.setdefault(node_key, {})
+            if param in node_samples:
+                raise ValueError(
+                    f"Duplicate sample entry for '{node_key}/{param}'."
+                )
+            node_samples[param] = value
+
+        if samples:
+            if "samples" in state.meta:
+                raise ValueError(
+                    "Process meta already defines 'samples'. "
+                    "Do not set it manually when using sample keys."
+                )
+            state.meta["samples"] = samples
 
         centers = data.get(
             "centers",

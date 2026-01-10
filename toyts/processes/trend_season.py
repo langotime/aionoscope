@@ -198,11 +198,11 @@ class TrendSeasonAnomalyProcess(nn.Module):
             generator=generator,
             device=device,
         )  # [B]
-        anomaly_center = anomaly_center[:, None, None]  # [B, 1, 1]
+        anomaly_center_grid = anomaly_center[:, None, None]  # [B, 1, 1]
         anomaly_sigma = torch.full((batch_size, 1, 1), 0.03, device=device)  # [B, 1, 1]
 
         anomaly = anomaly_amp[:, None, None] * torch.exp(
-            -0.5 * ((time_grid - anomaly_center) / anomaly_sigma).pow(2)
+            -0.5 * ((time_grid - anomaly_center_grid) / anomaly_sigma).pow(2)
         )  # [B, 1, L]
 
         # --- Combine components into latent tensor ---
@@ -229,6 +229,24 @@ class TrendSeasonAnomalyProcess(nn.Module):
             "regime": regime_idx,
             "anomaly_type": anomaly_idx,
         }
+
+        anomaly_sigma_samples = torch.full(
+            (batch_size,),
+            0.03,
+            device=device,
+        )  # [B]
+        samples = {
+            "TrendSeasonAnomalyProcess": {
+                "trend_slope": slope,
+                "trend_offset": offset,
+                "season_freq": freq,
+                "season_phase": phase,
+                "season_amp": season_amp,
+                "anomaly_amp": anomaly_amp,
+                "anomaly_center": anomaly_center,
+                "anomaly_sigma": anomaly_sigma_samples,
+            }
+        }
         meta = {
             "process": "TrendSeasonAnomalyProcess",
             "seed": seed,
@@ -238,6 +256,7 @@ class TrendSeasonAnomalyProcess(nn.Module):
             "anomaly_names": self.anomaly_classes,
             "season_freq_min": self.season_freq_min,
             "season_freq_max": self.season_freq_max,
+            "samples": samples,
         }
 
         return LatentState(centers=centers, latent=latent, events=None, y=y, meta=meta)
