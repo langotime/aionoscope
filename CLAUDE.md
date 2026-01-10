@@ -53,6 +53,8 @@ This repo contains source code of the ToyTS library - PyTorch-native online synt
 - Always accept a torch.Generator (or seed) and use it for sampling.
 - Do not use global torch.manual_seed inside modules.
 - Write seed/parameters into meta so a specific batch can be reproduced.
+- Do not duplicate sampled tensors in meta if they already appear in LatentState or Observation outputs.
+- Do not store full-size sampled noise/masks in meta; store seeds and minimal parameters to regenerate.
 
 ### Separation of responsibilities
 - Process is responsible for ground truth and labels.
