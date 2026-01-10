@@ -35,6 +35,7 @@ class MissingnessView(View):
         gap_length: int,
         hold_prob: float,
     ) -> None:
+        """Initialize missingness parameters."""
         super().__init__()
         if not (0.0 <= dropout_prob <= 1.0):
             raise ValueError("dropout_prob must be in [0, 1].")

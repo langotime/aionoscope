@@ -52,6 +52,7 @@ class TrendSeasonAnomalyProcess(nn.Module):
         season_freq_max: float = 4.0,
         anomaly_scale: float = 1.5,
     ) -> None:
+        """Initialize the trend-season-anomaly process parameters."""
         super().__init__()
 
         if seq_len <= 0:
@@ -239,4 +240,4 @@ class TrendSeasonAnomalyProcess(nn.Module):
             "season_freq_max": self.season_freq_max,
         }
 
-        return LatentState(centers=centers, latent=latent, y=y, meta=meta)
+        return LatentState(centers=centers, latent=latent, events=None, y=y, meta=meta)

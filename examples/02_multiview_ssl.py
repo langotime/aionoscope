@@ -4,9 +4,11 @@ import torch
 
 from toyts.core.pipeline import SynthPipeline
 from toyts.core.utils import utils_make_canonical_A0
+from toyts.kernels.pqrst import make_pqrst_kernel_bank, pqrst_kernel_size
 from toyts.datasets.iterable import SynthBatchIterableDataset
 from toyts.processes.pulse_train import PulseTrainProcess
 from toyts.views.ecg_leads import ECGLeadsView
+from toyts.views.events import EventImpulseView, KernelConvView
 from toyts.views.missingness import MissingnessView
 from toyts.views.noise import BaselineWanderView, NoiseView, NormalizeView
 from toyts.views.sampling import SamplingAggregationView
@@ -28,11 +30,32 @@ def main() -> None:
         amplitude=2.0,
     )
 
+    spacing = (process.seq_len - 1) / (process.num_pulses + 1)
+    kernel_size = pqrst_kernel_size(spacing=spacing, support_sigma=6.0)
+    kernels = make_pqrst_kernel_bank(
+        shape_names=process.shape_classes,
+        spacing=spacing,
+        kernel_size=kernel_size,
+        device=device,
+    )  # [K, T, W]
+    padding = kernel_size // 2
+
     # 2. Define two different augmentations (views) for SSL
     A0 = utils_make_canonical_A0(num_leads=1, num_latent=3)
 
+    def event_head() -> list[torch.nn.Module]:
+        return [
+            EventImpulseView(
+                seq_len=process.seq_len,
+                amplitude_param="amplitude",
+                rounding="nearest",
+            ),
+            KernelConvView(kernels=kernels, padding=padding),
+        ]
+
     # View 1: A moderately noisy, resampled version
     view1_transform = torch.nn.Sequential(
+        *event_head(),
         ECGLeadsView(A0=A0, jitter_std=0.05, max_delay=2),
         NoiseView(noise_std=0.1),
         BaselineWanderView(amplitude_std=0.2, freq_min=0.1, freq_max=0.3),
@@ -42,6 +65,7 @@ def main() -> None:
 
     # View 2: A version with more noise and some missing data
     view2_transform = torch.nn.Sequential(
+        *event_head(),
         ECGLeadsView(A0=A0, jitter_std=0.1, max_delay=4),
         NoiseView(noise_std=0.15),
         BaselineWanderView(amplitude_std=0.4, freq_min=0.05, freq_max=0.2),

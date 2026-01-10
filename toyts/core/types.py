@@ -5,6 +5,7 @@ from typing import Any
 
 import torch
 
+from .events import EventBatch
 
 @dataclass(frozen=True)
 class LatentState:
@@ -12,6 +13,7 @@ class LatentState:
 
     centers: torch.Tensor  # [B, N]
     latent: torch.Tensor | None  # [B, K, L]
+    events: EventBatch | None
     y: dict[str, torch.Tensor]  # label tensors, e.g. {"shape": [B]}
     meta: dict[str, Any]
 

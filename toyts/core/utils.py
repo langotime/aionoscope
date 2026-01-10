@@ -9,12 +9,14 @@ from .types import LatentState, Observation
 
 
 def utils_require_latent(z: LatentState | Observation, name: str) -> LatentState:
+    """Return LatentState or raise a TypeError with context."""
     if isinstance(z, LatentState):
         return z
     raise TypeError(f"{name} expects LatentState, got {type(z).__name__}.")
 
 
 def utils_require_observation(z: LatentState | Observation, name: str) -> Observation:
+    """Return Observation or raise a TypeError with context."""
     if isinstance(z, Observation):
         return z
     raise TypeError(f"{name} expects Observation, got {type(z).__name__}.")
@@ -31,6 +33,7 @@ def utils_sum_latent(latent: torch.Tensor) -> torch.Tensor:
 
 
 def utils_make_canonical_A0(num_leads: int, num_latent: int) -> torch.Tensor:
+    """Create a deterministic mixing matrix with shape [C, K]."""
     if num_leads <= 0 or num_latent <= 0:
         raise ValueError("num_leads and num_latent must be positive.")
 
@@ -47,6 +50,7 @@ def utils_make_random_A0(
     rng: torch.Generator,
     device: torch.device,
 ) -> torch.Tensor:
+    """Sample a random mixing matrix with shape [C, K]."""
     if num_leads <= 0 or num_latent <= 0:
         raise ValueError("num_leads and num_latent must be positive.")
     if rng is None:
@@ -63,6 +67,7 @@ def utils_make_random_A0(
 
 
 def utils_extract_process_meta(meta: dict[str, Any]) -> dict[str, Any]:
+    """Extract the process metadata dict from an observation meta payload."""
     if "process" not in meta:
         raise ValueError(
             "Observation meta is missing 'process'. "

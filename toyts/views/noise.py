@@ -21,6 +21,7 @@ class NoiseView(View):
     """
 
     def __init__(self, *, noise_std: float) -> None:
+        """Initialize additive noise parameters."""
         super().__init__()
         if noise_std < 0:
             raise ValueError(f"noise_std must be non-negative, got {noise_std}.")
@@ -87,6 +88,7 @@ class BaselineWanderView(View):
         freq_min: float,
         freq_max: float,
     ) -> None:
+        """Initialize baseline wander parameters."""
         super().__init__()
         if amplitude_std < 0:
             raise ValueError(f"amplitude_std must be non-negative, got {amplitude_std}.")
@@ -159,6 +161,9 @@ class BaselineWanderView(View):
             "amplitude_std": self.amplitude_std,
             "freq_min": self.freq_min,
             "freq_max": self.freq_max,
+            "freq": freq,
+            "phase": phase,
+            "amplitude": amplitude,
             "process": process_meta,
         }
         return Observation(x=observed_signal, y=input_state.y, meta=meta)

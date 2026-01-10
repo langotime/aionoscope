@@ -29,6 +29,7 @@ class SamplingAggregationView(View):
         stride: int | None = None,
         window: int | None = None,
     ) -> None:
+        """Initialize sampling/aggregation parameters."""
         super().__init__()
         valid_modes = {"downsample", "mean", "max"}
         if mode not in valid_modes:

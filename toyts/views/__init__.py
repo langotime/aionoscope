@@ -1,5 +1,6 @@
 from .base import View, ViewChain
 from .ecg_leads import ECGLeadsView
+from .events import EventImpulseView, EventStreamView, KernelConvView
 from .missingness import MissingnessView
 from .noise import BaselineWanderView, NoiseView, NormalizeView
 from .sampling import SamplingAggregationView
@@ -9,6 +10,9 @@ __all__ = [
     "BaselineWanderView",
     "ClippingView",
     "ECGLeadsView",
+    "EventImpulseView",
+    "EventStreamView",
+    "KernelConvView",
     "MissingnessView",
     "NoiseView",
     "NormalizeView",

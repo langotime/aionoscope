@@ -9,10 +9,14 @@ from torch import nn
 from toyts import (
     BaselineWanderView,
     ECGLeadsView,
+    EventImpulseView,
+    KernelConvView,
     NoiseView,
     NormalizeView,
     PulseTrainProcess,
     SynthPipeline,
+    make_pqrst_kernel_bank,
+    pqrst_kernel_size,
 )
 from toyts.core.utils import utils_make_canonical_A0
 
@@ -30,6 +34,16 @@ def main() -> None:
         amplitude=1.0,
     )
 
+    spacing = (process.seq_len - 1) / (process.num_pulses + 1)
+    kernel_size = pqrst_kernel_size(spacing=spacing, support_sigma=6.0)
+    kernels = make_pqrst_kernel_bank(
+        shape_names=process.shape_classes,
+        spacing=spacing,
+        kernel_size=kernel_size,
+        device=device,
+    )  # [K, T, W]
+    padding = kernel_size // 2
+
     A0 = utils_make_canonical_A0(num_leads=12, num_latent=3).to(device)  # [C, K]
     lead_names = [
         "I",
@@ -46,9 +60,23 @@ def main() -> None:
         "V6",
     ]
 
+    def event_head() -> list[nn.Module]:
+        return [
+            EventImpulseView(
+                seq_len=process.seq_len,
+                amplitude_param="amplitude",
+                rounding="nearest",
+            ),
+            KernelConvView(kernels=kernels, padding=padding),
+        ]
+
     views = {
-        "clean": ECGLeadsView(A0=A0, jitter_std=0.03, max_delay=3),
+        "clean": nn.Sequential(
+            *event_head(),
+            ECGLeadsView(A0=A0, jitter_std=0.03, max_delay=3),
+        ),
         "noisy": nn.Sequential(
+            *event_head(),
             ECGLeadsView(A0=A0, jitter_std=0.03, max_delay=3),
             BaselineWanderView(amplitude_std=0.2, freq_min=0.1, freq_max=0.5),
             NoiseView(noise_std=0.15),

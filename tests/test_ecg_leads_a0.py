@@ -3,7 +3,16 @@ from __future__ import annotations
 import pytest
 import torch
 
-from toyts import ECGLeadsView, PulseTrainProcess, SynthPipeline
+from toyts import (
+    ECGLeadsView,
+    EventImpulseView,
+    KernelConvView,
+    PulseTrainProcess,
+    SynthPipeline,
+    ViewChain,
+    make_pqrst_kernel_bank,
+    pqrst_kernel_size,
+)
 from toyts.core.utils import utils_make_random_A0
 
 
@@ -31,9 +40,29 @@ def test_ecg_leads_accepts_batched_A0() -> None:
         dtype=torch.float32,
     ).reshape(batch_size, num_leads, num_latent)  # [B, C, K]
 
+    spacing = (process.seq_len - 1) / (process.num_pulses + 1)
+    kernel_size = pqrst_kernel_size(spacing=spacing, support_sigma=6.0)
+    kernels = make_pqrst_kernel_bank(
+        shape_names=process.shape_classes,
+        spacing=spacing,
+        kernel_size=kernel_size,
+        device=device,
+    )  # [K, T, W]
+    padding = kernel_size // 2
+
     pipeline = SynthPipeline(
         process=process,
-        views={"clean": ECGLeadsView(A0=A0, jitter_std=0.0, max_delay=0)},
+        views={
+            "clean": ViewChain(
+                EventImpulseView(
+                    seq_len=process.seq_len,
+                    amplitude_param="amplitude",
+                    rounding="nearest",
+                ),
+                KernelConvView(kernels=kernels, padding=padding),
+                ECGLeadsView(A0=A0, jitter_std=0.0, max_delay=0),
+            )
+        },
     )
 
     generator = torch.Generator(device=device)
@@ -43,8 +72,11 @@ def test_ecg_leads_accepts_batched_A0() -> None:
     obs = batch["clean"]
 
     assert obs.x.shape == (batch_size, num_leads, 64)
-    assert obs.meta["A0"].shape == (batch_size, num_leads, num_latent)
-    assert torch.allclose(obs.meta["A0"], A0)
+    views = obs.meta["views"]
+    ecg_meta = views[2]
+    A0_meta = ecg_meta["A0"]  # [B, C, K]
+    assert A0_meta.shape == (batch_size, num_leads, num_latent)
+    assert torch.allclose(A0_meta, A0)
 
 
 def test_ecg_leads_rejects_batched_A0_mismatch() -> None:
@@ -53,9 +85,29 @@ def test_ecg_leads_rejects_batched_A0_mismatch() -> None:
 
     A0 = torch.ones((2, 4, 3), dtype=torch.float32)  # [B, C, K]
 
+    spacing = (process.seq_len - 1) / (process.num_pulses + 1)
+    kernel_size = pqrst_kernel_size(spacing=spacing, support_sigma=6.0)
+    kernels = make_pqrst_kernel_bank(
+        shape_names=process.shape_classes,
+        spacing=spacing,
+        kernel_size=kernel_size,
+        device=device,
+    )  # [K, T, W]
+    padding = kernel_size // 2
+
     pipeline = SynthPipeline(
         process=process,
-        views={"clean": ECGLeadsView(A0=A0, jitter_std=0.0, max_delay=0)},
+        views={
+            "clean": ViewChain(
+                EventImpulseView(
+                    seq_len=process.seq_len,
+                    amplitude_param="amplitude",
+                    rounding="nearest",
+                ),
+                KernelConvView(kernels=kernels, padding=padding),
+                ECGLeadsView(A0=A0, jitter_std=0.0, max_delay=0),
+            )
+        },
     )
 
     generator = torch.Generator(device=device)
@@ -80,9 +132,29 @@ def test_ecg_leads_accepts_callable_A0() -> None:
     ) -> torch.Tensor:
         return torch.zeros((batch_size, num_leads, num_latent), device=device)  # [B, C, K]
 
+    spacing = (process.seq_len - 1) / (process.num_pulses + 1)
+    kernel_size = pqrst_kernel_size(spacing=spacing, support_sigma=6.0)
+    kernels = make_pqrst_kernel_bank(
+        shape_names=process.shape_classes,
+        spacing=spacing,
+        kernel_size=kernel_size,
+        device=device,
+    )  # [K, T, W]
+    padding = kernel_size // 2
+
     pipeline = SynthPipeline(
         process=process,
-        views={"clean": ECGLeadsView(A0=sample_A0, jitter_std=0.0, max_delay=0)},
+        views={
+            "clean": ViewChain(
+                EventImpulseView(
+                    seq_len=process.seq_len,
+                    amplitude_param="amplitude",
+                    rounding="nearest",
+                ),
+                KernelConvView(kernels=kernels, padding=padding),
+                ECGLeadsView(A0=sample_A0, jitter_std=0.0, max_delay=0),
+            )
+        },
     )
 
     generator = torch.Generator(device=device)
@@ -93,7 +165,10 @@ def test_ecg_leads_accepts_callable_A0() -> None:
 
     zeros = torch.zeros_like(obs.x)  # [B, C, L]
     assert torch.allclose(obs.x, zeros)
-    assert obs.meta["A0"].shape == (batch_size, num_leads, num_latent)
+    views = obs.meta["views"]
+    ecg_meta = views[2]
+    A0_meta = ecg_meta["A0"]  # [B, C, K]
+    assert A0_meta.shape == (batch_size, num_leads, num_latent)
 
 
 def test_utils_make_random_A0_shape() -> None:

@@ -101,6 +101,7 @@ class UnitsPercentOfCapacityView(View):
     """
 
     def __init__(self, *, capacity_min: float, capacity_max: float) -> None:
+        """Initialize the capacity range for percent scaling."""
         super().__init__()
         if capacity_min <= 0 or capacity_max <= 0:
             raise ValueError("capacity_min/max must be positive.")
@@ -166,6 +167,7 @@ class ClippingView(View):
     """
 
     def __init__(self, *, min_value: float, max_value: float) -> None:
+        """Initialize clipping bounds."""
         super().__init__()
         if max_value <= min_value:
             raise ValueError("max_value must be greater than min_value.")

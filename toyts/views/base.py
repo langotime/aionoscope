@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from typing import Any
+
 import torch
 from torch import nn
 
 from ..core.types import LatentState, Observation
+from ..core.utils import utils_extract_process_meta
 
 
 class View(nn.Module):
@@ -38,13 +41,14 @@ class ViewChain(View):
 
     Modules will be added to it in the order they are passed in the constructor.
     The `forward` method of this class will call the `forward` of each contained
-    view in order.
+    view in order. View metadata is accumulated into `Observation.meta["views"]`.
 
     Args:
         *views: A sequence of `View` modules to chain together.
     """
 
     def __init__(self, *views: View) -> None:
+        """Initialize the chain with one or more views."""
         super().__init__()
         if not views:
             raise ValueError("ViewChain requires at least one view.")
@@ -64,11 +68,45 @@ class ViewChain(View):
                 generator is passed to each view in the chain.
 
         Returns:
-            The final `Observation` after applying all views in sequence.
+            The final `Observation` after applying all views in sequence, with
+            per-view metadata stored in `meta["views"]`.
         """
         output: LatentState | Observation = input_state
+        views_trace: list[dict[str, Any]] = []
+        if isinstance(input_state, Observation):
+            existing_views = input_state.meta.get("views")
+            if existing_views is not None:
+                if not isinstance(existing_views, list):
+                    raise ValueError(
+                        "Observation meta 'views' must be a list. "
+                        f"Got {type(existing_views).__name__}."
+                    )
+                for entry in existing_views:
+                    if not isinstance(entry, dict):
+                        raise ValueError(
+                            "Observation meta 'views' entries must be dicts. "
+                            f"Got {type(entry).__name__}."
+                        )
+                views_trace = list(existing_views)
         for view in self.views:
             output = view(output, rng=rng)
+            if not isinstance(output, Observation):
+                raise TypeError("ViewChain must end with an Observation.")
+            process_meta = utils_extract_process_meta(output.meta)
+            view_meta = dict(output.meta)
+            view_meta.pop("process", None)
+            view_meta.pop("views", None)
+            views_trace.append(view_meta)
+            output = Observation(
+                x=output.x,
+                y=output.y,
+                meta={**output.meta, "views": views_trace},
+            )
         if not isinstance(output, Observation):
             raise TypeError("ViewChain must end with an Observation.")
-        return output
+        process_meta = utils_extract_process_meta(output.meta)
+        meta = {
+            "process": process_meta,
+            "views": views_trace,
+        }
+        return Observation(x=output.x, y=output.y, meta=meta)

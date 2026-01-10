@@ -10,6 +10,8 @@ from ..core.types import Observation
 
 
 class SynthBatchIterableDataset(IterableDataset[dict[str, Observation]]):
+    """Iterable dataset that yields batches from a SynthPipeline."""
+
     def __init__(
         self,
         *,
@@ -19,6 +21,7 @@ class SynthBatchIterableDataset(IterableDataset[dict[str, Observation]]):
         seed: int,
         max_batches: int | None,
     ) -> None:
+        """Initialize the dataset with a pipeline and batch settings."""
         if batch_size <= 0:
             raise ValueError(f"batch_size must be positive, got {batch_size}.")
         if seed < 0:
@@ -33,6 +36,7 @@ class SynthBatchIterableDataset(IterableDataset[dict[str, Observation]]):
         self.max_batches = max_batches
 
     def __iter__(self) -> Iterator[dict[str, Observation]]:
+        """Yield batches indefinitely or for max_batches iterations."""
         generator = torch.Generator(device=self.device)
         generator.manual_seed(self.seed)
 

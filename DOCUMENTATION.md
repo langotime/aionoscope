@@ -6,6 +6,16 @@ ToyTS is a PyTorch-native synthetic time series dataset generator designed for r
 
 The core philosophy of ToyTS is the strict separation of the data-generating **Process** from the **View** or observation model. This design principle is crucial for developing and testing models that are robust to superficial variations in the data and can learn the underlying dynamics of the system.
 
+ToyTS is intended to support composable processes across domains. The goal is to generate everything from the simplest time series (single event, repeated events of one type) to complex combinations, so SSL models can be trained with a curriculum that starts with isolated events and gradually increases complexity.
+
+### Design Goals
+
+*   **Composable process graphs**: Build complex generators from reusable blocks with branching and merging.
+*   **Latent-first processes**: Processes emit latent structures (continuous components and/or event streams). Views are responsible for rendering into regular samples (e.g., impulse + conv1d) or keeping event streams as observations.
+*   **Event streams as first-class**: Raw events are a valid representation for training and evaluation.
+*   **Curriculum-ready**: Gradually scale complexity from single events to multi-component mixtures.
+*   **Reproducible**: Deterministic outputs given a fixed seed and graph.
+
 ### Why ToyTS?
 
 *   **Benchmark SSL**: ToyTS allows you to generate multiple, augmented "views" of the same underlying data, which is a key requirement for many SSL techniques, such as contrastive learning.
@@ -42,22 +52,32 @@ The library is built around a unidirectional data flow, which can be visualized 
                    +-----------------+      +-----------------+
 ```
 
-1.  **Process**: This is a `torch.nn.Module` that generates the "ground truth" or latent state of the system. It is responsible for creating the underlying dynamics, such as events, regimes, or latent components. The output of a `Process` is a `LatentState` object, which contains the latent signal, the ground-truth labels (`y`), and metadata.
+1.  **Process**: This is a `torch.nn.Module` that generates the "ground truth" or latent state of the system. It is responsible for creating the underlying dynamics, such as events, regimes, or latent components. A process emits latent structures (not sampled arrays) along with labels and metadata.
 
 2.  **LatentState**: A dataclass that holds the output of a `Process`. It contains:
-    *   `centers`: The locations of events.
-    *   `latent`: The latent signal components.
+    *   `centers`: The locations of events (empty if none).
+    *   `latent`: The latent signal components (optional).
+    *   `events`: Event streams or event parameters when needed.
     *   `y`: A dictionary of ground-truth labels.
     *   `meta`: A dictionary of metadata about the generation process.
 
-3.  **View**: This is also a `torch.nn.Module` that transforms a `LatentState` or another `Observation` into a new `Observation`. Views are used to model how the latent state is observed in the real world. This can include adding noise, simulating sensor outputs, introducing missing data, or changing the sampling rate.
+3.  **View**: This is also a `torch.nn.Module` that transforms a `LatentState` or another `Observation` into a new `Observation`. Views are used to model how the latent state is observed in the real world. This can include rendering events into samples, adding noise, simulating sensors, introducing missing data, or changing the sampling rate.
 
 4.  **Observation**: A dataclass that holds the output of a `View`. It contains:
-    *   `x`: The observed time series tensor.
+    *   `x`: The observed representation (dense samples or event tensors).
     *   `y`: The ground-truth labels (passed through from the `LatentState`).
-    *   `meta`: A dictionary of metadata from both the `Process` and the `View`.
+    *   `meta`: A dictionary of metadata. Process metadata is stored under `meta["process"]`. View metadata is stored under `meta["views"]` as an ordered list (one entry per view in the chain). `SynthPipeline` also adds `meta["pipeline_seed"]`.
 
 5.  **SynthPipeline**: This module orchestrates the data generation. It takes a `Process` and a dictionary of `Views` and, when called, generates a batch of data containing all the requested views of the same underlying latent state.
+
+## Process Graphs and Branching Examples
+
+Process graphs allow non-linear composition, which is hard to express as a simple chain. Typical branching/merging use cases:
+
+*   **Conditional regimes**: route different subgraphs based on a sampled class (e.g., steady vs ramping vs spiky).
+*   **Parallel components**: build events, trend, and seasonality in separate branches and merge them.
+*   **Optional effects**: apply anomalies or perturbations only for specific classes.
+*   **Curriculum generators**: switch between single events, event trains, and mixed dynamics with a shared interface.
 
 ## Installation
 
@@ -69,13 +89,76 @@ cd toyts
 pip install -e .
 ```
 
+## Simple ProcessGraph Example (Two Generators)
+
+This example builds a small event process from two generator nodes and merges them into one stream.
+
+```python
+import torch
+
+from toyts.core.events import EventSchema
+from toyts.core.pipeline import SynthPipeline
+from toyts.processes.graph import ProcessGraph
+from toyts.processes.nodes import EventTrainNode, SingleEventNode, UnionEventsNode
+from toyts.views.events import EventStreamView
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+schema = EventSchema(
+    type_names=["spike", "pulse"],
+    param_names=["amplitude"],
+    time_unit="samples",
+)
+
+process = ProcessGraph(
+    name="simple_combo",
+    outputs={"events"},
+    base_meta={"seq_len": 512},
+    graph=[
+        SingleEventNode(
+            seq_len=512,
+            schema=schema,
+            type_name="spike",
+            time_min=64,
+            time_max=448,
+            amplitude_min=0.8,
+            amplitude_max=1.2,
+            amplitude_param="amplitude",
+            out_key="single",
+        ),
+        EventTrainNode(
+            seq_len=512,
+            num_events=6,
+            schema=schema,
+            mode="regular",
+            type_label_key=None,
+            type_id=schema.type_id("pulse"),
+            amplitude_min=0.5,
+            amplitude_max=0.5,
+            amplitude_param="amplitude",
+            missed_gap_factor=2.0,
+            out_key="train",
+            centers_out_key="train_centers",
+        ),
+        UnionEventsNode(in_keys=["single", "train"], out_key="events"),
+    ],
+)
+
+views = {"events": EventStreamView()}
+pipeline = SynthPipeline(process=process, views=views)
+batch = pipeline(batch_size=4, device=device)
+
+events = batch["events"].x  # [B, E, 2+P]
+```
+
 ## Quick Start: A Detailed Walk-through
 
 Let's walk through the example from `toyts/examples/01_simple_pulse.py` to understand how to use the library.
+`PulseTrainProcess` is a reusable wrapper around a richer process graph; this walkthrough uses it to demonstrate ECG-style rendering.
 
 ### Step 1: Define the Process
 
-First, we define a `Process` that will generate our latent signal. In this case, we use `PulseTrainProcess` to generate an ECG-like signal.
+First, we define a `Process` that will generate our latent events. In this case, we use `PulseTrainProcess` to generate an ECG-like event stream.
 
 ```python
 from toyts.processes.pulse_train import PulseTrainProcess
@@ -91,29 +174,49 @@ process = PulseTrainProcess(
 )
 ```
 
-This process will generate a signal of length 1024 sampled at 250 Hz with a ~1.2 Hz pulse rate (~72 bpm). The pulses can have different rhythms and shapes, and the underlying latent signal will have 3 components (P, QRS, T).
+This process will generate events over a 1024-sample window at 250 Hz with a ~1.2 Hz pulse rate (~72 bpm). The pulses can have different rhythms and shapes, and the event types encode the QRS morphology.
 
 ### Step 2: Define the Views
 
-Next, we define a set of `Views` to transform the latent signal into observed signals. We can create multiple views to simulate different observation conditions.
+Next, we define a set of `Views` to render events into latent components, then transform them into observed signals. We can create multiple views to simulate different observation conditions.
 
 ```python
 import torch
 from toyts.core.utils import utils_make_canonical_A0
+from toyts.kernels.pqrst import make_pqrst_kernel_bank, pqrst_kernel_size
 from toyts.views.ecg_leads import ECGLeadsView
+from toyts.views.events import EventImpulseView, KernelConvView
 from toyts.views.noise import NoiseView, BaselineWanderView
 from toyts.views.sampling import SamplingAggregationView
 from toyts.views.noise import NormalizeView
 
+spacing = (process.seq_len - 1) / (process.num_pulses + 1)
+kernel_size = pqrst_kernel_size(spacing=spacing, support_sigma=6.0)
+kernels = make_pqrst_kernel_bank(
+    shape_names=process.shape_classes,
+    spacing=spacing,
+    kernel_size=kernel_size,
+    device=torch.device("cpu"),
+)
+padding = kernel_size // 2
+
 A0 = utils_make_canonical_A0(num_leads=8, num_latent=3)
 views = {
-    "clean": ECGLeadsView(A0=A0, jitter_std=0.0, max_delay=0),
+    "clean": torch.nn.Sequential(
+        EventImpulseView(seq_len=process.seq_len, amplitude_param="amplitude", rounding="nearest"),
+        KernelConvView(kernels=kernels, padding=padding),
+        ECGLeadsView(A0=A0, jitter_std=0.0, max_delay=0),
+    ),
     "noisy": torch.nn.Sequential(
+        EventImpulseView(seq_len=process.seq_len, amplitude_param="amplitude", rounding="nearest"),
+        KernelConvView(kernels=kernels, padding=padding),
         ECGLeadsView(A0=A0, jitter_std=0.05, max_delay=3),
         NoiseView(noise_std=0.1),
         BaselineWanderView(amplitude_std=0.3, freq_min=0.05, freq_max=0.2),
     ),
     "normalized_and_resampled": torch.nn.Sequential(
+        EventImpulseView(seq_len=process.seq_len, amplitude_param="amplitude", rounding="nearest"),
+        KernelConvView(kernels=kernels, padding=padding),
         ECGLeadsView(A0=A0, jitter_std=0.05, max_delay=3),
         NoiseView(noise_std=0.1),
         BaselineWanderView(amplitude_std=0.3, freq_min=0.05, freq_max=0.2),

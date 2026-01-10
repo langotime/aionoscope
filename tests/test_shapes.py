@@ -4,11 +4,16 @@ import torch
 
 from toyts import (
     ECGLeadsView,
+    EventImpulseView,
+    KernelConvView,
     PulseTrainProcess,
     SamplingAggregationView,
     SynthPipeline,
     TrendSeasonAnomalyProcess,
     UnitsAbsoluteView,
+    ViewChain,
+    make_pqrst_kernel_bank,
+    pqrst_kernel_size,
 )
 
 
@@ -29,9 +34,29 @@ def test_pulse_train_shapes() -> None:
         dtype=torch.float32,
     )  # [C, K]
 
+    spacing = (process.seq_len - 1) / (process.num_pulses + 1)
+    kernel_size = pqrst_kernel_size(spacing=spacing, support_sigma=6.0)
+    kernels = make_pqrst_kernel_bank(
+        shape_names=process.shape_classes,
+        spacing=spacing,
+        kernel_size=kernel_size,
+        device=device,
+    )  # [K, T, W]
+    padding = kernel_size // 2
+
     pipeline = SynthPipeline(
         process=process,
-        views={"clean": ECGLeadsView(A0=A0, jitter_std=0.0, max_delay=0)},
+        views={
+            "clean": ViewChain(
+                EventImpulseView(
+                    seq_len=process.seq_len,
+                    amplitude_param="amplitude",
+                    rounding="nearest",
+                ),
+                KernelConvView(kernels=kernels, padding=padding),
+                ECGLeadsView(A0=A0, jitter_std=0.0, max_delay=0),
+            )
+        },
     )
 
     generator = torch.Generator(device=device)

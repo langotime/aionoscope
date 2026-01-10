@@ -10,6 +10,7 @@ from ..views.base import View, ViewChain
 
 
 def _wrap_view(view: nn.Module) -> View:
+    """Normalize view modules to a View instance."""
     if isinstance(view, View):
         return view
     if isinstance(view, nn.Sequential):
@@ -25,7 +26,8 @@ class SynthPipeline(nn.Module):
 
     This module orchestrates the generation of synthetic data by first invoking a
     `Process` module to create a latent state, and then passing that latent state
-    through one or more `View` modules to generate observations. It handles the
+    through one or more `View` modules to generate observations. It handles RNG
+    splitting and metadata propagation across views.
 
     Args:
         process: A `Process` module that generates the latent state.
@@ -34,6 +36,7 @@ class SynthPipeline(nn.Module):
     """
 
     def __init__(self, process: Process, views: dict[str, nn.Module]):
+        """Initialize the pipeline with a process and view dictionary."""
         super().__init__()
 
         if not isinstance(views, dict) or not views:

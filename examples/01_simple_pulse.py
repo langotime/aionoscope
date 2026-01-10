@@ -4,8 +4,10 @@ import torch
 
 from toyts.core.pipeline import SynthPipeline
 from toyts.core.utils import utils_make_canonical_A0, utils_make_random_A0
+from toyts.kernels.pqrst import make_pqrst_kernel_bank, pqrst_kernel_size
 from toyts.processes.pulse_train import PulseTrainProcess
 from toyts.views.ecg_leads import ECGLeadsView
+from toyts.views.events import EventImpulseView, KernelConvView
 from toyts.views.noise import BaselineWanderView, NoiseView, NormalizeView
 from toyts.views.sampling import SamplingAggregationView
 
@@ -28,18 +30,42 @@ def main() -> None:
         amplitude=2.0,
     )
 
+    spacing = (process.seq_len - 1) / (process.num_pulses + 1)
+    kernel_size = pqrst_kernel_size(spacing=spacing, support_sigma=6.0)
+    kernels = make_pqrst_kernel_bank(
+        shape_names=process.shape_classes,
+        spacing=spacing,
+        kernel_size=kernel_size,
+        device=device,
+    )  # [K, T, W]
+    padding = kernel_size // 2
+
     # 2. Define the Views
-    # Views transform the latent signal into observed signals.
-    # We create a simple pipeline that simulates 8 ECG leads.
+    # Views render events into latent components, then simulate ECG leads.
     def make_views(A0: torch.Tensor) -> dict[str, torch.nn.Module]:
+        def event_head() -> list[torch.nn.Module]:
+            return [
+                EventImpulseView(
+                    seq_len=process.seq_len,
+                    amplitude_param="amplitude",
+                    rounding="nearest",
+                ),
+                KernelConvView(kernels=kernels, padding=padding),
+            ]
+
         return {
-            "clean": ECGLeadsView(A0=A0, jitter_std=0.0, max_delay=0),
+            "clean": torch.nn.Sequential(
+                *event_head(),
+                ECGLeadsView(A0=A0, jitter_std=0.0, max_delay=0),
+            ),
             "noisy": torch.nn.Sequential(
+                *event_head(),
                 ECGLeadsView(A0=A0, jitter_std=0.05, max_delay=3),
                 NoiseView(noise_std=0.1),
                 BaselineWanderView(amplitude_std=0.3, freq_min=0.05, freq_max=0.2),
             ),
             "normalized_and_resampled": torch.nn.Sequential(
+                *event_head(),
                 ECGLeadsView(A0=A0, jitter_std=0.05, max_delay=3),
                 NoiseView(noise_std=0.1),
                 BaselineWanderView(amplitude_std=0.3, freq_min=0.05, freq_max=0.2),

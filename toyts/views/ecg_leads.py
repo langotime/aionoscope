@@ -7,7 +7,7 @@ from torch import nn
 
 from ..core.rng import rng_make_generator
 from ..core.types import LatentState, Observation
-from ..core.utils import utils_require_latent
+from ..core.utils import utils_extract_process_meta
 from .base import View
 
 
@@ -43,6 +43,7 @@ class ECGLeadsView(View):
         jitter_std: float,
         max_delay: int,
     ) -> None:
+        """Initialize ECG lead mixing parameters."""
         super().__init__()
 
         self._A0_callable: (
@@ -90,11 +91,26 @@ class ECGLeadsView(View):
             An `Observation` object where `x` is the mixed and delayed
             multi-channel signal of shape `[B, C, L]`.
         """
-        latent_state = utils_require_latent(input_state, name="ECGLeadsView")
-        if latent_state.latent is None:
-            raise ValueError("ECGLeadsView requires LatentState.latent to be present.")
+        if isinstance(input_state, LatentState):
+            if input_state.latent is None:
+                raise ValueError("ECGLeadsView requires LatentState.latent to be present.")
+            latent_signal = input_state.latent  # [B, K, L]
+            labels = input_state.y
+            process_meta = input_state.meta
+        elif isinstance(input_state, Observation):
+            latent_signal = input_state.x  # [B, K, L]
+            if latent_signal.ndim != 3:
+                raise ValueError(
+                    "ECGLeadsView expects Observation.x with shape [B, K, L]. "
+                    f"Got {latent_signal.shape}."
+                )
+            labels = input_state.y
+            process_meta = utils_extract_process_meta(input_state.meta)
+        else:
+            raise TypeError(
+                f"ECGLeadsView expects LatentState or Observation, got {type(input_state).__name__}."
+            )
 
-        latent_signal = latent_state.latent  # [B, K, L]
         batch_size, latent_channels, seq_len = latent_signal.shape
         device = latent_signal.device
 
@@ -198,7 +214,7 @@ class ECGLeadsView(View):
             "jitter_std": self.jitter_std,
             "max_delay": self.max_delay,
             "delays": delays,
-            "process": latent_state.meta,
+            "process": process_meta,
         }
 
-        return Observation(x=observed_signal, y=latent_state.y, meta=meta)
+        return Observation(x=observed_signal, y=labels, meta=meta)

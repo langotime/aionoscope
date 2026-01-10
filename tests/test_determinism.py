@@ -4,10 +4,14 @@ import torch
 
 from toyts import (
     ECGLeadsView,
+    EventImpulseView,
+    KernelConvView,
     NoiseView,
     PulseTrainProcess,
     SynthPipeline,
     ViewChain,
+    make_pqrst_kernel_bank,
+    pqrst_kernel_size,
 )
 
 
@@ -28,9 +32,35 @@ def test_determinism_pulse_train() -> None:
         dtype=torch.float32,
     )  # [C, K]
 
+    spacing = (process.seq_len - 1) / (process.num_pulses + 1)
+    kernel_size = pqrst_kernel_size(spacing=spacing, support_sigma=6.0)
+    kernels = make_pqrst_kernel_bank(
+        shape_names=process.shape_classes,
+        spacing=spacing,
+        kernel_size=kernel_size,
+        device=device,
+    )  # [K, T, W]
+    padding = kernel_size // 2
+
+    base_chain = ViewChain(
+        EventImpulseView(
+            seq_len=process.seq_len,
+            amplitude_param="amplitude",
+            rounding="nearest",
+        ),
+        KernelConvView(kernels=kernels, padding=padding),
+        ECGLeadsView(A0=A0, jitter_std=0.01, max_delay=2),
+    )
+
     views = {
-        "clean": ECGLeadsView(A0=A0, jitter_std=0.01, max_delay=2),
+        "clean": base_chain,
         "noisy": ViewChain(
+            EventImpulseView(
+                seq_len=process.seq_len,
+                amplitude_param="amplitude",
+                rounding="nearest",
+            ),
+            KernelConvView(kernels=kernels, padding=padding),
             ECGLeadsView(A0=A0, jitter_std=0.01, max_delay=2),
             NoiseView(noise_std=0.1),
         ),
