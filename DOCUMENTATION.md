@@ -66,7 +66,7 @@ The library is built around a unidirectional data flow, which can be visualized 
 4.  **Observation**: A dataclass that holds the output of a `View`. It contains:
     *   `x`: The observed representation (dense samples or event tensors).
     *   `y`: The ground-truth labels (passed through from the `LatentState`).
-    *   `meta`: A dictionary of metadata. Process metadata is stored under `meta["process"]`. View metadata is stored under `meta["views"]` as an ordered list (one entry per view in the chain). `SynthPipeline` also adds `meta["pipeline_seed"]`.
+    *   `meta`: A dictionary of metadata. Process metadata is stored under `meta["process"]`. View metadata is stored under `meta["views"]` as an ordered list (one entry per view in the chain). `SynthPipeline` also adds `meta["pipeline_seed"]`. Use `Observation.view_meta("ViewName")` to fetch a specific view’s metadata.
 
 5.  **SynthPipeline**: This module orchestrates the data generation. It takes a `Process` and a dictionary of `Views` and, when called, generates a batch of data containing all the requested views of the same underlying latent state.
 

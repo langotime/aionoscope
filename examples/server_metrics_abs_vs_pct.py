@@ -53,6 +53,8 @@ def main() -> None:
 
     regime_names = batch["abs"].meta["process"]["regime_names"]
     anomaly_names = batch["abs"].meta["process"]["anomaly_names"]
+    pct_capacity_meta = batch["pct"].view_meta("UnitsPercentOfCapacityView")
+    print("pct capacity", tuple(pct_capacity_meta["capacity"].shape))
 
     fig, axes = plt.subplots(2, 2, figsize=(14, 8))
     fig.suptitle("Server metrics: abs vs pct views and labels")

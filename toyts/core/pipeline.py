@@ -11,8 +11,10 @@ from ..views.base import View, ViewChain
 
 def _wrap_view(view: nn.Module) -> View:
     """Normalize view modules to a View instance."""
-    if isinstance(view, View):
+    if isinstance(view, ViewChain):
         return view
+    if isinstance(view, View):
+        return ViewChain(view)
     if isinstance(view, nn.Sequential):
         return ViewChain(*list(view))
     raise TypeError(

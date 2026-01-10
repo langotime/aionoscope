@@ -95,6 +95,8 @@ def main() -> None:
 
     shape_names = batch["clean"].meta["process"]["shape_names"]
     rhythm_names = batch["clean"].meta["process"]["rhythm_names"]
+    clean_ecg_meta = batch["clean"].view_meta("ECGLeadsView")
+    print("clean ECG delays", tuple(clean_ecg_meta["delays"].shape))
 
     fig, axes = plt.subplots(2, 2, figsize=(14, 8))
     fig.suptitle("ECG: clean vs noisy views and labels")

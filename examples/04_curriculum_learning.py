@@ -232,7 +232,8 @@ def main() -> None:
         rng = torch.Generator(device=device).manual_seed(1000 + stage_idx)
         batch = pipeline(batch_size=4, device=device, rng=rng)
 
-        events_mask = batch["events"].meta["mask"]  # [B, E]
+        events_meta = batch["events"].view_meta("EventStreamView")
+        events_mask = events_meta["mask"]  # [B, E]
         valid_events = events_mask.sum(dim=1)  # [B]
         clean = batch["clean"].x  # [B, C=1, L]
         view1 = batch["view1"].x  # [B, C=1, L']

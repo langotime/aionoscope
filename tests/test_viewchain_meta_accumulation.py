@@ -83,11 +83,11 @@ def test_viewchain_accumulates_views_meta() -> None:
     assert views[3]["view"] == "BaselineWanderView"
     assert views[4]["view"] == "NormalizeView"
 
-    ecg_meta = views[2]
+    ecg_meta = obs.view_meta("ECGLeadsView")
     delays = ecg_meta["delays"]  # [B, C]
     assert delays.shape == (batch_size, obs.x.shape[1])
 
-    wander_meta = views[3]
+    wander_meta = obs.view_meta("BaselineWanderView")
     freq = wander_meta["freq"]  # [B, C, 1]
     phase = wander_meta["phase"]  # [B, C, 1]
     amplitude = wander_meta["amplitude"]  # [B, C, 1]

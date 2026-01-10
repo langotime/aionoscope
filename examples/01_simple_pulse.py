@@ -90,6 +90,12 @@ def main() -> None:
         print("  Shape labels:", obs.y["shape"])
         print("  Rhythm labels:", obs.y["rhythm"])
 
+    clean_ecg_meta = batch["clean"].view_meta("ECGLeadsView")
+    noisy_wander_meta = batch["noisy"].view_meta("BaselineWanderView")
+    print("\nView metadata:")
+    print("  clean ECG delays:", tuple(clean_ecg_meta["delays"].shape))
+    print("  noisy baseline freq:", tuple(noisy_wander_meta["freq"].shape))
+
     # Example of how to plot the signals in an ECG-style stacked view
     try:
         import matplotlib.pyplot as plt

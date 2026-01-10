@@ -113,6 +113,9 @@ def main() -> None:
     print("  Signal shape:", view2_obs.x.shape)
     print("  Shape labels (should match View 1):", view2_obs.y["shape"])
 
+    view1_ecg_meta = view1_obs.view_meta("ECGLeadsView")
+    print("  View 1 ECG delays:", tuple(view1_ecg_meta["delays"].shape))
+
     # Verify that the ground truth labels are the same for both views
     assert torch.all(view1_obs.y["shape"] == view2_obs.y["shape"])
     assert torch.all(view1_obs.y["rhythm"] == view2_obs.y["rhythm"])

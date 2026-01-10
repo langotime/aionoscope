@@ -69,6 +69,10 @@ def main() -> None:
         print("  Anomaly labels:", obs.y["anomaly_type"])
         print(f"  Signal range: [{obs.x.min():.2f}, {obs.x.max():.2f}]")
 
+    capacity_meta = batch["percent_of_capacity"].view_meta("UnitsPercentOfCapacityView")
+    print("\nView metadata:")
+    print("  percent_of_capacity capacity:", tuple(capacity_meta["capacity"].shape))
+
     # Example of how to plot the different unit views
     try:
         import matplotlib.pyplot as plt

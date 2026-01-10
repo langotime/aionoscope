@@ -72,8 +72,7 @@ def test_ecg_leads_accepts_batched_A0() -> None:
     obs = batch["clean"]
 
     assert obs.x.shape == (batch_size, num_leads, 64)
-    views = obs.meta["views"]
-    ecg_meta = views[2]
+    ecg_meta = obs.view_meta("ECGLeadsView")
     A0_meta = ecg_meta["A0"]  # [B, C, K]
     assert A0_meta.shape == (batch_size, num_leads, num_latent)
     assert torch.allclose(A0_meta, A0)
@@ -165,8 +164,7 @@ def test_ecg_leads_accepts_callable_A0() -> None:
 
     zeros = torch.zeros_like(obs.x)  # [B, C, L]
     assert torch.allclose(obs.x, zeros)
-    views = obs.meta["views"]
-    ecg_meta = views[2]
+    ecg_meta = obs.view_meta("ECGLeadsView")
     A0_meta = ecg_meta["A0"]  # [B, C, K]
     assert A0_meta.shape == (batch_size, num_leads, num_latent)
 
