@@ -85,6 +85,8 @@ This repo contains source code of the ToyTS library - PyTorch-native online synt
 ### Documentation and examples
 - Document each process and view: what it models, which parameters, expected invariances.
 - Keep minimal runnable scripts in examples/.
+- Examples should visualize results (plots or figures).
+- Notebooks should be interactive: no `main()`; walk through the Python demo step-by-step and visualize all steps.
 
 ## Planning
 - Write plans to files in Markdown.
