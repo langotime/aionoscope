@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import torch
 
+from ..core.samplers import ConstantSampler, SamplerLike, sampler_from_value, sampler_sample
 from ..core.rng import rng_make_generator
 from ..core.types import LatentState, Observation
 from ..core.utils import utils_extract_process_meta, utils_sum_latent
@@ -96,19 +97,38 @@ class UnitsPercentOfCapacityView(View):
     `x_percent = 100 * x_absolute / capacity`.
 
     Args:
-        capacity_min: The minimum possible capacity value.
-        capacity_max: The maximum possible capacity value.
+        capacity_min: Sampler for the minimum capacity value.
+        capacity_max: Sampler for the maximum capacity value.
     """
 
-    def __init__(self, *, capacity_min: float, capacity_max: float) -> None:
+    def __init__(
+        self,
+        *,
+        capacity_min: SamplerLike[float],
+        capacity_max: SamplerLike[float],
+    ) -> None:
         """Initialize the capacity range for percent scaling."""
         super().__init__()
-        if capacity_min <= 0 or capacity_max <= 0:
-            raise ValueError("capacity_min/max must be positive.")
-        if capacity_max <= capacity_min:
+        capacity_min_sampler = sampler_from_value(capacity_min, name="capacity_min")
+        capacity_max_sampler = sampler_from_value(capacity_max, name="capacity_max")
+        if isinstance(capacity_min_sampler, ConstantSampler) and capacity_min_sampler.value <= 0:
+            raise ValueError(
+                f"capacity_min must be positive, got {capacity_min_sampler.value}."
+            )
+        if isinstance(capacity_max_sampler, ConstantSampler) and capacity_max_sampler.value <= 0:
+            raise ValueError(
+                f"capacity_max must be positive, got {capacity_max_sampler.value}."
+            )
+        if (
+            isinstance(capacity_min_sampler, ConstantSampler)
+            and isinstance(capacity_max_sampler, ConstantSampler)
+            and capacity_max_sampler.value <= capacity_min_sampler.value
+        ):
             raise ValueError("capacity_max must be greater than capacity_min.")
         self.capacity_min = capacity_min
         self.capacity_max = capacity_max
+        self.capacity_min_sampler = capacity_min_sampler
+        self.capacity_max_sampler = capacity_max_sampler
 
     def forward(
         self,
@@ -134,21 +154,56 @@ class UnitsPercentOfCapacityView(View):
 
         generator, seed, _ = rng_make_generator(rng=rng, device=device)
 
+        capacity_min = sampler_sample(
+            sampler=self.capacity_min_sampler,
+            shape=(signal.shape[0],),
+            rng=generator,
+            device=device,
+            dtype=torch.float32,
+            name="capacity_min",
+        )  # [B]
+        capacity_max = sampler_sample(
+            sampler=self.capacity_max_sampler,
+            shape=(signal.shape[0],),
+            rng=generator,
+            device=device,
+            dtype=torch.float32,
+            name="capacity_max",
+        )  # [B]
+        if torch.any(capacity_min <= 0) or torch.any(capacity_max <= 0):
+            raise ValueError("capacity_min/max must be positive for all samples.")
+        if torch.any(capacity_max <= capacity_min):
+            raise ValueError("capacity_max must be greater than capacity_min for all samples.")
+
         # Sample a capacity for each item in the batch
         capacity = torch.rand(
             (signal.shape[0], 1, 1),
             generator=generator,
             device=device,
         )  # [B, 1, 1]
-        capacity = self.capacity_min + (self.capacity_max - self.capacity_min) * capacity  # [B, 1, 1]
+        capacity = capacity_min[:, None, None] + (
+            capacity_max - capacity_min
+        )[:, None, None] * capacity  # [B, 1, 1]
 
         observed_signal = 100.0 * signal / capacity  # [B, C, L]
 
+        samples = {
+            "capacity_min": capacity_min,
+            "capacity_max": capacity_max,
+        }
+        spec = {
+            "capacity_min": self.capacity_min_sampler.spec(),
+            "capacity_max": self.capacity_max_sampler.spec(),
+        }
         meta = {
             "view": "UnitsPercentOfCapacityView",
             "units": "percent",
             "seed": seed,
+            "capacity_min": capacity_min,
+            "capacity_max": capacity_max,
             "capacity": capacity,
+            "samples": samples,
+            "spec": spec,
             "process": process_meta,
         }
         return Observation(x=observed_signal, y=labels, meta=meta)
@@ -162,17 +217,30 @@ class ClippingView(View):
     and any values above `max_value` are set to `max_value`.
 
     Args:
-        min_value: The minimum value for the clipping range.
-        max_value: The maximum value for the clipping range.
+        min_value: Sampler for the clipping minimum.
+        max_value: Sampler for the clipping maximum.
     """
 
-    def __init__(self, *, min_value: float, max_value: float) -> None:
+    def __init__(
+        self,
+        *,
+        min_value: SamplerLike[float],
+        max_value: SamplerLike[float],
+    ) -> None:
         """Initialize clipping bounds."""
         super().__init__()
-        if max_value <= min_value:
+        min_value_sampler = sampler_from_value(min_value, name="min_value")
+        max_value_sampler = sampler_from_value(max_value, name="max_value")
+        if (
+            isinstance(min_value_sampler, ConstantSampler)
+            and isinstance(max_value_sampler, ConstantSampler)
+            and max_value_sampler.value <= min_value_sampler.value
+        ):
             raise ValueError("max_value must be greater than min_value.")
         self.min_value = min_value
         self.max_value = max_value
+        self.min_value_sampler = min_value_sampler
+        self.max_value_sampler = max_value_sampler
 
     def forward(
         self,
@@ -186,7 +254,7 @@ class ClippingView(View):
 
         Args:
             input_state: An `Observation` object.
-            rng: This parameter is ignored.
+            rng: An optional `torch.Generator` for reproducibility.
 
         Returns:
             An `Observation` where `x` is the clipped signal, with the same
@@ -196,15 +264,46 @@ class ClippingView(View):
             raise TypeError("ClippingView expects an Observation, got LatentState.")
 
         process_meta = utils_extract_process_meta(input_state.meta)
+        generator, seed, _ = rng_make_generator(rng=rng, device=input_state.x.device)
+        batch_size = input_state.x.shape[0]
+        min_value = sampler_sample(
+            sampler=self.min_value_sampler,
+            shape=(batch_size,),
+            rng=generator,
+            device=input_state.x.device,
+            dtype=torch.float32,
+            name="min_value",
+        )  # [B]
+        max_value = sampler_sample(
+            sampler=self.max_value_sampler,
+            shape=(batch_size,),
+            rng=generator,
+            device=input_state.x.device,
+            dtype=torch.float32,
+            name="max_value",
+        )  # [B]
+        if torch.any(max_value <= min_value):
+            raise ValueError("max_value must be greater than min_value for all samples.")
         observed_signal = torch.clamp(
             input_state.x,
-            min=self.min_value,
-            max=self.max_value,
+            min=min_value[:, None, None],
+            max=max_value[:, None, None],
         )  # [B, C, L]
+        samples = {
+            "min_value": min_value,
+            "max_value": max_value,
+        }
+        spec = {
+            "min_value": self.min_value_sampler.spec(),
+            "max_value": self.max_value_sampler.spec(),
+        }
         meta = {
             "view": "ClippingView",
-            "min_value": self.min_value,
-            "max_value": self.max_value,
+            "min_value": min_value,
+            "max_value": max_value,
+            "seed": seed,
+            "samples": samples,
+            "spec": spec,
             "process": process_meta,
         }
         return Observation(x=observed_signal, y=input_state.y, meta=meta)

@@ -5,6 +5,7 @@ import math
 import torch
 from torch import nn
 
+from ..core.samplers import ConstantSampler, SamplerLike, sampler_from_value, sampler_sample
 from ..core.rng import rng_make_generator
 from ..core.types import LatentState
 
@@ -29,13 +30,12 @@ class TrendSeasonAnomalyProcess(nn.Module):
             Defaults to ["steady", "ramping", "spiky"].
         anomaly_classes: A list of anomaly types to sample from.
             Defaults to ["none", "drop", "spike"].
-        slope_max: The maximum absolute slope for the "ramping" trend.
-        season_amp: The base amplitude for the seasonal component.
-        spiky_boost: The factor by which `season_amp` is multiplied for the
-            "spiky" regime.
-        season_freq_min: The minimum frequency for the sinusoidal season.
-        season_freq_max: The maximum frequency for the sinusoidal season.
-        anomaly_scale: The base scale for the amplitude of anomalies.
+        slope_max: Sampler for the maximum absolute slope in "ramping" mode.
+        season_amp: Sampler for the base seasonal amplitude.
+        spiky_boost: Sampler for the multiplicative boost in "spiky" regime.
+        season_freq_min: Sampler for the minimum season frequency.
+        season_freq_max: Sampler for the maximum season frequency.
+        anomaly_scale: Sampler for the anomaly amplitude scale.
     """
 
     def __init__(
@@ -45,12 +45,12 @@ class TrendSeasonAnomalyProcess(nn.Module):
         components: int,
         regime_classes: list[str] | None = None,
         anomaly_classes: list[str] | None = None,
-        slope_max: float = 0.8,
-        season_amp: float = 1.0,
-        spiky_boost: float = 2.0,
-        season_freq_min: float = 1.0,
-        season_freq_max: float = 4.0,
-        anomaly_scale: float = 1.5,
+        slope_max: SamplerLike[float] = 0.8,
+        season_amp: SamplerLike[float] = 1.0,
+        spiky_boost: SamplerLike[float] = 2.0,
+        season_freq_min: SamplerLike[float] = 1.0,
+        season_freq_max: SamplerLike[float] = 4.0,
+        anomaly_scale: SamplerLike[float] = 1.5,
     ) -> None:
         """Initialize the trend-season-anomaly process parameters."""
         super().__init__()
@@ -59,16 +59,41 @@ class TrendSeasonAnomalyProcess(nn.Module):
             raise ValueError(f"seq_len must be positive, got {seq_len}.")
         if components < 3:
             raise ValueError("components must be >= 3 (trend, season, anomaly).")
-        if slope_max <= 0:
-            raise ValueError(f"slope_max must be positive, got {slope_max}.")
-        if season_amp <= 0:
-            raise ValueError(f"season_amp must be positive, got {season_amp}.")
-        if season_freq_min <= 0 or season_freq_max <= 0:
-            raise ValueError("season_freq_min/max must be positive.")
-        if season_freq_max < season_freq_min:
+        slope_max_sampler = sampler_from_value(slope_max, name="slope_max")
+        season_amp_sampler = sampler_from_value(season_amp, name="season_amp")
+        spiky_boost_sampler = sampler_from_value(spiky_boost, name="spiky_boost")
+        season_freq_min_sampler = sampler_from_value(season_freq_min, name="season_freq_min")
+        season_freq_max_sampler = sampler_from_value(season_freq_max, name="season_freq_max")
+        anomaly_scale_sampler = sampler_from_value(anomaly_scale, name="anomaly_scale")
+
+        if isinstance(slope_max_sampler, ConstantSampler) and slope_max_sampler.value <= 0:
+            raise ValueError(f"slope_max must be positive, got {slope_max_sampler.value}.")
+        if isinstance(season_amp_sampler, ConstantSampler) and season_amp_sampler.value <= 0:
+            raise ValueError(
+                f"season_amp must be positive, got {season_amp_sampler.value}."
+            )
+        if isinstance(spiky_boost_sampler, ConstantSampler) and spiky_boost_sampler.value <= 0:
+            raise ValueError(
+                f"spiky_boost must be positive, got {spiky_boost_sampler.value}."
+            )
+        if isinstance(season_freq_min_sampler, ConstantSampler) and season_freq_min_sampler.value <= 0:
+            raise ValueError(
+                f"season_freq_min must be positive, got {season_freq_min_sampler.value}."
+            )
+        if isinstance(season_freq_max_sampler, ConstantSampler) and season_freq_max_sampler.value <= 0:
+            raise ValueError(
+                f"season_freq_max must be positive, got {season_freq_max_sampler.value}."
+            )
+        if (
+            isinstance(season_freq_min_sampler, ConstantSampler)
+            and isinstance(season_freq_max_sampler, ConstantSampler)
+            and season_freq_max_sampler.value < season_freq_min_sampler.value
+        ):
             raise ValueError("season_freq_max must be >= season_freq_min.")
-        if anomaly_scale <= 0:
-            raise ValueError(f"anomaly_scale must be positive, got {anomaly_scale}.")
+        if isinstance(anomaly_scale_sampler, ConstantSampler) and anomaly_scale_sampler.value <= 0:
+            raise ValueError(
+                f"anomaly_scale must be positive, got {anomaly_scale_sampler.value}."
+            )
 
         self.seq_len = seq_len
         self.components = components
@@ -80,6 +105,12 @@ class TrendSeasonAnomalyProcess(nn.Module):
         self.season_freq_min = season_freq_min
         self.season_freq_max = season_freq_max
         self.anomaly_scale = anomaly_scale
+        self.slope_max_sampler = slope_max_sampler
+        self.season_amp_sampler = season_amp_sampler
+        self.spiky_boost_sampler = spiky_boost_sampler
+        self.season_freq_min_sampler = season_freq_min_sampler
+        self.season_freq_max_sampler = season_freq_max_sampler
+        self.anomaly_scale_sampler = anomaly_scale_sampler
 
         if not self.regime_classes:
             raise ValueError("regime_classes must be non-empty.")
@@ -139,6 +170,72 @@ class TrendSeasonAnomalyProcess(nn.Module):
         time_grid = torch.linspace(0, 1, steps=self.seq_len, device=device)  # [L]
         time_grid = time_grid[None, None, :]  # [1, 1, L]
 
+        # --- Sample parameter ranges ---
+        slope_max_value = sampler_sample(
+            sampler=self.slope_max_sampler,
+            shape=(batch_size,),
+            rng=generator,
+            device=device,
+            dtype=torch.float32,
+            name="slope_max",
+        )  # [B]
+        if torch.any(slope_max_value <= 0):
+            raise ValueError("slope_max must be positive for all samples.")
+
+        season_amp_base = sampler_sample(
+            sampler=self.season_amp_sampler,
+            shape=(batch_size,),
+            rng=generator,
+            device=device,
+            dtype=torch.float32,
+            name="season_amp",
+        )  # [B]
+        if torch.any(season_amp_base <= 0):
+            raise ValueError("season_amp must be positive for all samples.")
+
+        spiky_boost_value = sampler_sample(
+            sampler=self.spiky_boost_sampler,
+            shape=(batch_size,),
+            rng=generator,
+            device=device,
+            dtype=torch.float32,
+            name="spiky_boost",
+        )  # [B]
+        if torch.any(spiky_boost_value <= 0):
+            raise ValueError("spiky_boost must be positive for all samples.")
+
+        season_freq_min_value = sampler_sample(
+            sampler=self.season_freq_min_sampler,
+            shape=(batch_size,),
+            rng=generator,
+            device=device,
+            dtype=torch.float32,
+            name="season_freq_min",
+        )  # [B]
+        season_freq_max_value = sampler_sample(
+            sampler=self.season_freq_max_sampler,
+            shape=(batch_size,),
+            rng=generator,
+            device=device,
+            dtype=torch.float32,
+            name="season_freq_max",
+        )  # [B]
+        if torch.any(season_freq_min_value <= 0) or torch.any(season_freq_max_value <= 0):
+            raise ValueError("season_freq_min/max must be positive for all samples.")
+        if torch.any(season_freq_max_value < season_freq_min_value):
+            raise ValueError("season_freq_max must be >= season_freq_min for all samples.")
+
+        anomaly_scale_value = sampler_sample(
+            sampler=self.anomaly_scale_sampler,
+            shape=(batch_size,),
+            rng=generator,
+            device=device,
+            dtype=torch.float32,
+            name="anomaly_scale",
+        )  # [B]
+        if torch.any(anomaly_scale_value <= 0):
+            raise ValueError("anomaly_scale must be positive for all samples.")
+
         # --- Generate Trend Component ---
         slope = torch.zeros(batch_size, device=device)  # [B]
         ramp_mask = (regime_idx == self._ramping_index)  # [B]
@@ -147,7 +244,7 @@ class TrendSeasonAnomalyProcess(nn.Module):
             generator=generator,
             device=device,
         )  # [B]
-        slope_noise = (slope_noise * 2.0 - 1.0) * self.slope_max  # [B]
+        slope_noise = (slope_noise * 2.0 - 1.0) * slope_max_value  # [B]
         slope = torch.where(ramp_mask, slope_noise, slope)  # [B]
 
         offset = torch.randn(
@@ -163,7 +260,7 @@ class TrendSeasonAnomalyProcess(nn.Module):
             generator=generator,
             device=device,
         )  # [B]
-        freq = self.season_freq_min + (self.season_freq_max - self.season_freq_min) * freq  # [B]
+        freq = season_freq_min_value + (season_freq_max_value - season_freq_min_value) * freq  # [B]
         phase = torch.rand(
             (batch_size,),
             generator=generator,
@@ -172,8 +269,9 @@ class TrendSeasonAnomalyProcess(nn.Module):
         phase = phase * (2.0 * math.pi)  # [B]
 
         spiky_mask = (regime_idx == self._spiky_index)  # [B]
-        season_amp = torch.full((batch_size,), self.season_amp, device=device)  # [B]
-        season_amp = torch.where(spiky_mask, season_amp * self.spiky_boost, season_amp)  # [B]
+        season_amp = torch.where(
+            spiky_mask, season_amp_base * spiky_boost_value, season_amp_base
+        )  # [B]
 
         season = season_amp[:, None, None] * torch.sin(
             2.0 * math.pi * freq[:, None, None] * time_grid + phase[:, None, None]
@@ -189,7 +287,7 @@ class TrendSeasonAnomalyProcess(nn.Module):
             generator=generator,
             device=device,
         )  # [B]
-        anomaly_noise = (0.5 + anomaly_noise) * self.anomaly_scale  # [B]
+        anomaly_noise = (0.5 + anomaly_noise) * anomaly_scale_value  # [B]
         anomaly_amp = torch.where(spike_mask, anomaly_noise, anomaly_amp)  # [B]
         anomaly_amp = torch.where(drop_mask, -anomaly_noise, anomaly_amp)  # [B]
 
@@ -237,11 +335,17 @@ class TrendSeasonAnomalyProcess(nn.Module):
         )  # [B]
         samples = {
             "TrendSeasonAnomalyProcess": {
+                "slope_max": slope_max_value,
                 "trend_slope": slope,
                 "trend_offset": offset,
+                "season_freq_min": season_freq_min_value,
+                "season_freq_max": season_freq_max_value,
                 "season_freq": freq,
                 "season_phase": phase,
+                "season_amp_base": season_amp_base,
+                "spiky_boost": spiky_boost_value,
                 "season_amp": season_amp,
+                "anomaly_scale": anomaly_scale_value,
                 "anomaly_amp": anomaly_amp,
                 "anomaly_center": anomaly_center,
                 "anomaly_sigma": anomaly_sigma_samples,
@@ -254,9 +358,11 @@ class TrendSeasonAnomalyProcess(nn.Module):
             "components": self.components,
             "regime_names": self.regime_classes,
             "anomaly_names": self.anomaly_classes,
-            "season_freq_min": self.season_freq_min,
-            "season_freq_max": self.season_freq_max,
             "samples": samples,
         }
+        if isinstance(self.season_freq_min_sampler, ConstantSampler):
+            meta["season_freq_min"] = float(self.season_freq_min_sampler.value)
+        if isinstance(self.season_freq_max_sampler, ConstantSampler):
+            meta["season_freq_max"] = float(self.season_freq_max_sampler.value)
 
         return LatentState(centers=centers, latent=latent, events=None, y=y, meta=meta)

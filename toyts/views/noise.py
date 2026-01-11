@@ -4,6 +4,7 @@ import math
 
 import torch
 
+from ..core.samplers import ConstantSampler, SamplerLike, sampler_from_value, sampler_sample
 from ..core.rng import rng_make_generator
 from ..core.types import LatentState, Observation
 from ..core.utils import utils_extract_process_meta
@@ -17,15 +18,19 @@ class NoiseView(View):
     input signal.
 
     Args:
-        noise_std: The standard deviation of the Gaussian noise to add.
+        noise_std: Sampler for the Gaussian noise standard deviation.
     """
 
-    def __init__(self, *, noise_std: float) -> None:
+    def __init__(self, *, noise_std: SamplerLike[float]) -> None:
         """Initialize additive noise parameters."""
         super().__init__()
-        if noise_std < 0:
-            raise ValueError(f"noise_std must be non-negative, got {noise_std}.")
+        noise_std_sampler = sampler_from_value(noise_std, name="noise_std")
+        if isinstance(noise_std_sampler, ConstantSampler) and noise_std_sampler.value < 0:
+            raise ValueError(
+                f"noise_std must be non-negative, got {noise_std_sampler.value}."
+            )
         self.noise_std = noise_std
+        self.noise_std_sampler = noise_std_sampler
 
     def forward(
         self,
@@ -50,17 +55,33 @@ class NoiseView(View):
 
         process_meta = utils_extract_process_meta(input_state.meta)
         generator, seed, _ = rng_make_generator(rng=rng, device=input_state.x.device)
+        batch_size = input_state.x.shape[0]
+        noise_std = sampler_sample(
+            sampler=self.noise_std_sampler,
+            shape=(batch_size,),
+            rng=generator,
+            device=input_state.x.device,
+            dtype=torch.float32,
+            name="noise_std",
+        )  # [B]
+        if torch.any(noise_std < 0):
+            raise ValueError("noise_std must be non-negative for all samples.")
+
         noise = torch.randn(
             input_state.x.shape,
             generator=generator,
             device=input_state.x.device,
         )  # [B, C, L]
-        observed_signal = input_state.x + noise * self.noise_std  # [B, C, L]
+        observed_signal = input_state.x + noise * noise_std[:, None, None]  # [B, C, L]
 
+        samples = {"noise_std": noise_std}
+        spec = {"noise_std": self.noise_std_sampler.spec()}
         meta = {
             "view": "NoiseView",
             "seed": seed,
-            "noise_std": self.noise_std,
+            "noise_std": noise_std,
+            "samples": samples,
+            "spec": spec,
             "process": process_meta,
         }
         return Observation(x=observed_signal, y=input_state.y, meta=meta)
@@ -74,32 +95,44 @@ class BaselineWanderView(View):
     sine wave are randomized for each channel.
 
     Args:
-        amplitude_std: The standard deviation of the amplitude of the sine wave.
-            The actual amplitude is sampled from a standard normal distribution
-            and scaled by this value.
-        freq_min: The minimum frequency of the sine wave.
-        freq_max: The maximum frequency of the sine wave.
+        amplitude_std: Sampler for the sine-wave amplitude scale.
+        freq_min: Sampler for the minimum sine frequency.
+        freq_max: Sampler for the maximum sine frequency.
     """
 
     def __init__(
         self,
         *,
-        amplitude_std: float,
-        freq_min: float,
-        freq_max: float,
+        amplitude_std: SamplerLike[float],
+        freq_min: SamplerLike[float],
+        freq_max: SamplerLike[float],
     ) -> None:
         """Initialize baseline wander parameters."""
         super().__init__()
-        if amplitude_std < 0:
-            raise ValueError(f"amplitude_std must be non-negative, got {amplitude_std}.")
-        if freq_min <= 0 or freq_max <= 0:
-            raise ValueError("freq_min/max must be positive.")
-        if freq_max < freq_min:
+        amplitude_std_sampler = sampler_from_value(amplitude_std, name="amplitude_std")
+        freq_min_sampler = sampler_from_value(freq_min, name="freq_min")
+        freq_max_sampler = sampler_from_value(freq_max, name="freq_max")
+        if isinstance(amplitude_std_sampler, ConstantSampler) and amplitude_std_sampler.value < 0:
+            raise ValueError(
+                f"amplitude_std must be non-negative, got {amplitude_std_sampler.value}."
+            )
+        if isinstance(freq_min_sampler, ConstantSampler) and freq_min_sampler.value <= 0:
+            raise ValueError(f"freq_min must be positive, got {freq_min_sampler.value}.")
+        if isinstance(freq_max_sampler, ConstantSampler) and freq_max_sampler.value <= 0:
+            raise ValueError(f"freq_max must be positive, got {freq_max_sampler.value}.")
+        if (
+            isinstance(freq_min_sampler, ConstantSampler)
+            and isinstance(freq_max_sampler, ConstantSampler)
+            and freq_max_sampler.value < freq_min_sampler.value
+        ):
             raise ValueError("freq_max must be >= freq_min.")
 
         self.amplitude_std = amplitude_std
         self.freq_min = freq_min
         self.freq_max = freq_max
+        self.amplitude_std_sampler = amplitude_std_sampler
+        self.freq_min_sampler = freq_min_sampler
+        self.freq_max_sampler = freq_max_sampler
 
     def forward(
         self,
@@ -129,13 +162,45 @@ class BaselineWanderView(View):
         time_grid = torch.linspace(0, 1, steps=seq_len, device=input_state.x.device)  # [L]
         time_grid = time_grid[None, None, :]  # [1, 1, L]
 
+        amplitude_std = sampler_sample(
+            sampler=self.amplitude_std_sampler,
+            shape=(batch_size,),
+            rng=generator,
+            device=input_state.x.device,
+            dtype=torch.float32,
+            name="amplitude_std",
+        )  # [B]
+        if torch.any(amplitude_std < 0):
+            raise ValueError("amplitude_std must be non-negative for all samples.")
+
+        freq_min = sampler_sample(
+            sampler=self.freq_min_sampler,
+            shape=(batch_size,),
+            rng=generator,
+            device=input_state.x.device,
+            dtype=torch.float32,
+            name="freq_min",
+        )  # [B]
+        freq_max = sampler_sample(
+            sampler=self.freq_max_sampler,
+            shape=(batch_size,),
+            rng=generator,
+            device=input_state.x.device,
+            dtype=torch.float32,
+            name="freq_max",
+        )  # [B]
+        if torch.any(freq_min <= 0) or torch.any(freq_max <= 0):
+            raise ValueError("freq_min/max must be positive for all samples.")
+        if torch.any(freq_max < freq_min):
+            raise ValueError("freq_max must be >= freq_min for all samples.")
+
         # Sample frequency, phase, and amplitude for each channel
         freq = torch.rand(
             (batch_size, channels, 1),
             generator=generator,
             device=input_state.x.device,
         )  # [B, C, 1]
-        freq = self.freq_min + (self.freq_max - self.freq_min) * freq  # [B, C, 1]
+        freq = freq_min[:, None, None] + (freq_max - freq_min)[:, None, None] * freq  # [B, C, 1]
 
         phase = torch.rand(
             (batch_size, channels, 1),
@@ -149,21 +214,33 @@ class BaselineWanderView(View):
             generator=generator,
             device=input_state.x.device,
         )  # [B, C, 1]
-        amplitude = amplitude * self.amplitude_std  # [B, C, 1]
+        amplitude = amplitude * amplitude_std[:, None, None]  # [B, C, 1]
 
         # Create and add the baseline wander
         baseline = amplitude * torch.sin(2.0 * math.pi * freq * time_grid + phase)  # [B, C, L]
         observed_signal = input_state.x + baseline  # [B, C, L]
 
+        samples = {
+            "amplitude_std": amplitude_std,
+            "freq_min": freq_min,
+            "freq_max": freq_max,
+        }
+        spec = {
+            "amplitude_std": self.amplitude_std_sampler.spec(),
+            "freq_min": self.freq_min_sampler.spec(),
+            "freq_max": self.freq_max_sampler.spec(),
+        }
         meta = {
             "view": "BaselineWanderView",
             "seed": seed,
-            "amplitude_std": self.amplitude_std,
-            "freq_min": self.freq_min,
-            "freq_max": self.freq_max,
+            "amplitude_std": amplitude_std,
+            "freq_min": freq_min,
+            "freq_max": freq_max,
             "freq": freq,
             "phase": phase,
             "amplitude": amplitude,
+            "samples": samples,
+            "spec": spec,
             "process": process_meta,
         }
         return Observation(x=observed_signal, y=input_state.y, meta=meta)

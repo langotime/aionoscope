@@ -74,7 +74,7 @@ The library is built around a unidirectional data flow, which can be visualized 
 
 Process-level sampled parameters that are not already present in outputs are stored under `LatentState.meta["samples"]`. This is a nested dictionary keyed by a process/node identifier (for example, `"TrendSeasonAnomalyProcess"` or `"EventTrainNode:events"`), with tensors for each sampled parameter.
 
-For views, sampled parameters live in `Observation.meta["views"]`. Large masks/noise are not stored; instead views expose helpers to regenerate them from seeds. For example, to re-create MissingnessView masks:
+For views, sampled parameters live in `Observation.meta["views"]`. Each view records sampler outputs under `samples` and sampler configuration under `spec` (legacy top-level keys remain). Large masks/noise are not stored; instead views expose helpers to regenerate them from seeds. For example, to re-create MissingnessView masks:
 
 ```python
 miss_meta = observation.view_meta("MissingnessView")
@@ -114,6 +114,7 @@ import torch
 from toyts.core.events import EventSchema
 from toyts.core.pipeline import SynthPipeline
 from toyts.processes.graph import ProcessGraph
+from toyts import UniformSampler
 from toyts.processes.nodes import EventTrainNode, SingleEventNode, UnionEventsNode
 from toyts.views.events import EventStreamView
 
@@ -136,8 +137,7 @@ process = ProcessGraph(
             type_name="spike",
             time_min=64,
             time_max=448,
-            amplitude_min=0.8,
-            amplitude_max=1.2,
+            amplitude=UniformSampler(0.8, 1.2),
             amplitude_param="amplitude",
             out_key="single",
         ),
@@ -148,8 +148,7 @@ process = ProcessGraph(
             mode="regular",
             type_label_key=None,
             type_id=schema.type_id("pulse"),
-            amplitude_min=0.5,
-            amplitude_max=0.5,
+            amplitude=0.5,
             amplitude_param="amplitude",
             missed_gap_factor=2.0,
             out_key="train",

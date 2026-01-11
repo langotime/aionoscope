@@ -5,6 +5,13 @@ from collections.abc import Callable
 import torch
 from torch import nn
 
+from ..core.samplers import (
+    ConstantSampler,
+    SamplerLike,
+    sampler_from_value,
+    sampler_sample,
+    sampler_sample_scalar,
+)
 from ..core.rng import rng_make_generator
 from ..core.types import LatentState, Observation
 from ..core.utils import utils_extract_process_meta
@@ -29,10 +36,8 @@ class ECGLeadsView(View):
         A0: The base mixing matrix or a sampler for it. Accepts either a
             `torch.Tensor` of shape `[C, K]` or `[B, C, K]`, or a callable
             `A0(batch_size, generator, device)` returning `[B, C, K]`.
-        jitter_std: The standard deviation of the Gaussian noise added to the
-            mixing matrix for each sample. If 0, no jitter is applied.
-        max_delay: The maximum integer delay (positive or negative) to be
-            applied independently to each channel. If 0, no delay is applied.
+        jitter_std: Sampler for the mixing-matrix jitter scale.
+        max_delay: Sampler for the maximum integer delay (per batch).
     """
 
     def __init__(
@@ -40,8 +45,8 @@ class ECGLeadsView(View):
         *,
         A0: torch.Tensor
         | Callable[[int, torch.Generator, torch.device], torch.Tensor],
-        jitter_std: float,
-        max_delay: int,
+        jitter_std: SamplerLike[float],
+        max_delay: SamplerLike[int],
     ) -> None:
         """Initialize ECG lead mixing parameters."""
         super().__init__()
@@ -65,13 +70,26 @@ class ECGLeadsView(View):
                 "A0 must be a torch.Tensor or a callable returning a torch.Tensor. "
                 f"Got {type(A0).__name__}."
             )
-        if jitter_std < 0:
-            raise ValueError(f"jitter_std must be non-negative, got {jitter_std}.")
-        if max_delay < 0:
-            raise ValueError(f"max_delay must be non-negative, got {max_delay}.")
+        jitter_std_sampler = sampler_from_value(jitter_std, name="jitter_std")
+        max_delay_sampler = sampler_from_value(max_delay, name="max_delay")
+        if isinstance(jitter_std_sampler, ConstantSampler) and jitter_std_sampler.value < 0:
+            raise ValueError(
+                f"jitter_std must be non-negative, got {jitter_std_sampler.value}."
+            )
+        if isinstance(max_delay_sampler, ConstantSampler):
+            if isinstance(max_delay_sampler.value, bool) or not isinstance(
+                max_delay_sampler.value, int
+            ):
+                raise ValueError("max_delay must be an integer.")
+            if max_delay_sampler.value < 0:
+                raise ValueError(
+                    f"max_delay must be non-negative, got {max_delay_sampler.value}."
+                )
 
         self.jitter_std = jitter_std
         self.max_delay = max_delay
+        self.jitter_std_sampler = jitter_std_sampler
+        self.max_delay_sampler = max_delay_sampler
 
     def forward(
         self,
@@ -170,14 +188,39 @@ class ECGLeadsView(View):
             base_A0 = A0_source.float()  # [B, C, K]
             meta_A0 = base_A0  # [B, C, K]
 
+        jitter_std = sampler_sample(
+            sampler=self.jitter_std_sampler,
+            shape=(batch_size,),
+            rng=generator,
+            device=device,
+            dtype=torch.float32,
+            name="jitter_std",
+        )  # [B]
+        if torch.any(jitter_std < 0):
+            raise ValueError("jitter_std must be non-negative for all samples.")
+
+        max_delay_samples, max_delay_value = sampler_sample_scalar(
+            sampler=self.max_delay_sampler,
+            rng=generator,
+            device=device,
+            dtype=torch.int64,
+            name="max_delay",
+        )  # [1]
+        if isinstance(max_delay_value, bool):
+            raise ValueError("max_delay must be an integer.")
+        max_delay = int(max_delay_value)
+        if max_delay < 0:
+            raise ValueError(f"max_delay must be non-negative, got {max_delay}.")
+        max_delay_tensor = max_delay_samples.expand(batch_size)  # [B]
+
         # --- Apply Mixing Matrix Jitter ---
-        if self.jitter_std > 0:
+        if torch.any(jitter_std > 0):
             jitter = torch.randn(
                 (batch_size, base_A0.shape[1], latent_channels),
                 generator=generator,
                 device=device,
             )  # [B, C, K]
-            mixing_matrix = base_A0 + jitter * self.jitter_std  # [B, C, K]
+            mixing_matrix = base_A0 + jitter * jitter_std[:, None, None]  # [B, C, K]
         else:
             mixing_matrix = base_A0  # [B, C, K]
 
@@ -190,11 +233,11 @@ class ECGLeadsView(View):
 
         # --- Apply Channel-wise Delays ---
         delays = torch.zeros((batch_size, base_A0.shape[1]), device=device, dtype=torch.int64)  # [B, C]
-        if self.max_delay > 0:
+        if max_delay > 0:
             # Sample random delays for each channel in the batch
             delays = torch.randint(
-                -self.max_delay,
-                self.max_delay + 1,
+                -max_delay,
+                max_delay + 1,
                 (batch_size, base_A0.shape[1]),
                 generator=generator,
                 device=device,
@@ -206,14 +249,24 @@ class ECGLeadsView(View):
             shifted_idx = shifted_idx.to(torch.int64)  # [B, C, L]
             observed_signal = torch.gather(observed_signal, dim=2, index=shifted_idx)  # [B, C, L]
 
+        samples = {
+            "jitter_std": jitter_std,
+            "max_delay": max_delay_tensor,
+        }
+        spec = {
+            "jitter_std": self.jitter_std_sampler.spec(),
+            "max_delay": self.max_delay_sampler.spec(),
+        }
         meta = {
             "view": "ECGLeadsView",
             "seed": seed,
             "A0": meta_A0,
             "A": mixing_matrix,
-            "jitter_std": self.jitter_std,
-            "max_delay": self.max_delay,
+            "jitter_std": jitter_std,
+            "max_delay": max_delay_tensor,
             "delays": delays,
+            "samples": samples,
+            "spec": spec,
             "process": process_meta,
         }
 

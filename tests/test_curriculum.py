@@ -55,8 +55,7 @@ def test_curriculum_process_deterministic_given_seed() -> None:
                 type_name="gaussian",
                 time_min=8,
                 time_max=seq_len - 9,
-                amplitude_min=1.0,
-                amplitude_max=1.0,
+                amplitude=1.0,
                 amplitude_param="amplitude",
                 out_key="events",
             ),
@@ -79,8 +78,7 @@ def test_curriculum_process_deterministic_given_seed() -> None:
                 type_name="gaussian",
                 time_min=8,
                 time_max=seq_len - 9,
-                amplitude_min=1.0,
-                amplitude_max=1.0,
+                amplitude=1.0,
                 amplitude_param="amplitude",
                 out_key="events",
             ),
@@ -114,4 +112,3 @@ def test_curriculum_process_deterministic_given_seed() -> None:
     assert torch.equal(out1.y["curriculum_stage"], out2.y["curriculum_stage"])
     assert out1.meta["stage_id"] == 0
     assert out2.meta["stage_id"] == 0
-

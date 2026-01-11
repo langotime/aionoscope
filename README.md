@@ -46,6 +46,7 @@ import torch
 from toyts.core.events import EventSchema
 from toyts.core.pipeline import SynthPipeline
 from toyts.processes.graph import ProcessGraph
+from toyts import UniformSampler
 from toyts.processes.nodes import EventTrainNode, SingleEventNode, UnionEventsNode
 from toyts.views.events import EventStreamView
 
@@ -68,8 +69,7 @@ process = ProcessGraph(
             type_name="spike",
             time_min=64,
             time_max=448,
-            amplitude_min=0.8,
-            amplitude_max=1.2,
+            amplitude=UniformSampler(0.8, 1.2),
             amplitude_param="amplitude",
             out_key="single",
         ),
@@ -80,8 +80,7 @@ process = ProcessGraph(
             mode="regular",
             type_label_key=None,
             type_id=schema.type_id("pulse"),
-            amplitude_min=0.5,
-            amplitude_max=0.5,
+            amplitude=0.5,
             amplitude_param="amplitude",
             missed_gap_factor=2.0,
             out_key="train",

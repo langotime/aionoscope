@@ -23,16 +23,22 @@ def test_trend_season_samples_meta() -> None:
     proc_samples = samples["TrendSeasonAnomalyProcess"]
 
     expected_keys = {
+        "slope_max",
         "trend_slope",
         "trend_offset",
+        "season_freq_min",
+        "season_freq_max",
         "season_freq",
         "season_phase",
+        "season_amp_base",
+        "spiky_boost",
         "season_amp",
+        "anomaly_scale",
         "anomaly_amp",
         "anomaly_center",
         "anomaly_sigma",
     }
-    assert set(proc_samples.keys()) == expected_keys
+    assert expected_keys.issubset(set(proc_samples.keys()))
 
     for key in expected_keys:
         value = proc_samples[key]

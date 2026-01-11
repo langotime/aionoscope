@@ -4,6 +4,13 @@ from typing import Any
 
 import torch
 
+from ..core.samplers import (
+    ConstantSampler,
+    SamplerLike,
+    sampler_from_value,
+    sampler_sample,
+    sampler_sample_scalar,
+)
 from ..core.rng import rng_make_generator
 from ..core.types import LatentState, Observation
 from ..core.utils import utils_extract_process_meta
@@ -22,36 +29,55 @@ class MissingnessView(View):
     These operations are applied independently and in sequence.
 
     Args:
-        dropout_prob: The probability of setting a single data point to zero.
-        gap_prob: The probability of introducing a zero-gap in a given channel.
-        gap_length: The length of the zero-gap, if one is introduced.
-        hold_prob: The probability of replacing a data point with its previous
-            value (sample-and-hold).
+        dropout_prob: Sampler for point dropout probability.
+        gap_prob: Sampler for gap activation probability.
+        gap_length: Sampler for the gap length (per batch).
+        hold_prob: Sampler for sample-and-hold probability.
     """
 
     def __init__(
         self,
         *,
-        dropout_prob: float,
-        gap_prob: float,
-        gap_length: int,
-        hold_prob: float,
+        dropout_prob: SamplerLike[float],
+        gap_prob: SamplerLike[float],
+        gap_length: SamplerLike[int],
+        hold_prob: SamplerLike[float],
     ) -> None:
         """Initialize missingness parameters."""
         super().__init__()
-        if not (0.0 <= dropout_prob <= 1.0):
+        dropout_prob_sampler = sampler_from_value(dropout_prob, name="dropout_prob")
+        gap_prob_sampler = sampler_from_value(gap_prob, name="gap_prob")
+        gap_length_sampler = sampler_from_value(gap_length, name="gap_length")
+        hold_prob_sampler = sampler_from_value(hold_prob, name="hold_prob")
+
+        if isinstance(dropout_prob_sampler, ConstantSampler) and not (
+            0.0 <= float(dropout_prob_sampler.value) <= 1.0
+        ):
             raise ValueError("dropout_prob must be in [0, 1].")
-        if not (0.0 <= gap_prob <= 1.0):
+        if isinstance(gap_prob_sampler, ConstantSampler) and not (
+            0.0 <= float(gap_prob_sampler.value) <= 1.0
+        ):
             raise ValueError("gap_prob must be in [0, 1].")
-        if gap_length < 0:
-            raise ValueError("gap_length must be non-negative.")
-        if not (0.0 <= hold_prob <= 1.0):
+        if isinstance(hold_prob_sampler, ConstantSampler) and not (
+            0.0 <= float(hold_prob_sampler.value) <= 1.0
+        ):
             raise ValueError("hold_prob must be in [0, 1].")
+        if isinstance(gap_length_sampler, ConstantSampler):
+            if isinstance(gap_length_sampler.value, bool) or not isinstance(
+                gap_length_sampler.value, int
+            ):
+                raise ValueError("gap_length must be an integer.")
+            if gap_length_sampler.value < 0:
+                raise ValueError("gap_length must be non-negative.")
 
         self.dropout_prob = dropout_prob
         self.gap_prob = gap_prob
         self.gap_length = gap_length
         self.hold_prob = hold_prob
+        self.dropout_prob_sampler = dropout_prob_sampler
+        self.gap_prob_sampler = gap_prob_sampler
+        self.gap_length_sampler = gap_length_sampler
+        self.hold_prob_sampler = hold_prob_sampler
 
     @staticmethod
     def sample_masks(
@@ -80,20 +106,58 @@ class MissingnessView(View):
             raise ValueError(f"shape must be [B, C, L], got {shape}.")
         batch_size, channels, seq_len = shape
 
-        dropout_prob = meta["dropout_prob"]
-        gap_prob = meta["gap_prob"]
-        gap_length = meta["gap_length"]
-        hold_prob = meta["hold_prob"]
-        if not isinstance(dropout_prob, (float, int)):
+        def _resolve_prob(name: str) -> torch.Tensor:
+            value = meta[name]
+            if isinstance(value, torch.Tensor):
+                if value.ndim != 1:
+                    raise ValueError(f"{name} must have shape [B], got {value.shape}.")
+                if value.shape[0] == 1:
+                    value = value.expand(batch_size)
+                elif value.shape[0] != batch_size:
+                    raise ValueError(
+                        f"{name} must have shape [B], got {value.shape}."
+                    )
+                return value.to(device=device, dtype=torch.float32)
+            if isinstance(value, (float, int)):
+                return torch.full(
+                    (batch_size,),
+                    float(value),
+                    device=device,
+                    dtype=torch.float32,
+                )  # [B]
+            raise ValueError(f"{name} must be a float or tensor, got {type(value).__name__}.")
+
+        dropout_prob = _resolve_prob("dropout_prob")  # [B]
+        gap_prob = _resolve_prob("gap_prob")  # [B]
+        hold_prob = _resolve_prob("hold_prob")  # [B]
+
+        if torch.any((dropout_prob < 0.0) | (dropout_prob > 1.0)):
+            raise ValueError("dropout_prob must be in [0, 1] for all samples.")
+        if torch.any((gap_prob < 0.0) | (gap_prob > 1.0)):
+            raise ValueError("gap_prob must be in [0, 1] for all samples.")
+        if torch.any((hold_prob < 0.0) | (hold_prob > 1.0)):
+            raise ValueError("hold_prob must be in [0, 1] for all samples.")
+
+        gap_length_value = meta["gap_length"]
+        if isinstance(gap_length_value, torch.Tensor):
+            if gap_length_value.numel() != 1:
+                raise ValueError("gap_length must be a scalar when stored as a tensor.")
+            if gap_length_value.dtype not in (
+                torch.int8,
+                torch.int16,
+                torch.int32,
+                torch.int64,
+            ):
+                raise ValueError("gap_length tensor must have integer dtype.")
+            gap_length = int(gap_length_value.item())
+        elif isinstance(gap_length_value, int) and not isinstance(gap_length_value, bool):
+            gap_length = gap_length_value
+        else:
             raise ValueError(
-                f"dropout_prob must be a float, got {type(dropout_prob).__name__}."
+                f"gap_length must be an int, got {type(gap_length_value).__name__}."
             )
-        if not isinstance(gap_prob, (float, int)):
-            raise ValueError(f"gap_prob must be a float, got {type(gap_prob).__name__}.")
-        if not isinstance(gap_length, int):
-            raise ValueError(f"gap_length must be an int, got {type(gap_length).__name__}.")
-        if not isinstance(hold_prob, (float, int)):
-            raise ValueError(f"hold_prob must be a float, got {type(hold_prob).__name__}.")
+        if gap_length < 0:
+            raise ValueError("gap_length must be non-negative.")
 
         generator = torch.Generator(device=device)
         generator.manual_seed(int(meta["mask_seed"]))
@@ -103,13 +167,13 @@ class MissingnessView(View):
             device=device,
             dtype=torch.bool,
         )  # [B, C, L]
-        if dropout_prob > 0:
+        if torch.any(dropout_prob > 0):
             dropout_mask = torch.rand(
                 (batch_size, channels, seq_len),
                 generator=generator,
                 device=device,
             )  # [B, C, L]
-            dropout_mask = dropout_mask > float(dropout_prob)  # [B, C, L]
+            dropout_mask = dropout_mask > dropout_prob[:, None, None]  # [B, C, L]
 
         apply_gap = torch.zeros(
             (batch_size, channels),
@@ -126,13 +190,13 @@ class MissingnessView(View):
             device=device,
             dtype=torch.bool,
         )  # [B, C, L]
-        if gap_prob > 0 and gap_length > 0:
+        if torch.any(gap_prob > 0) and gap_length > 0:
             apply_gap = torch.rand(
                 (batch_size, channels),
                 generator=generator,
                 device=device,
             )  # [B, C]
-            apply_gap = apply_gap < float(gap_prob)  # [B, C]
+            apply_gap = apply_gap < gap_prob[:, None]  # [B, C]
 
             max_start = seq_len - gap_length
             if max_start < 0:
@@ -158,13 +222,13 @@ class MissingnessView(View):
             device=device,
             dtype=torch.bool,
         )  # [B, C, L]
-        if hold_prob > 0:
+        if torch.any(hold_prob > 0):
             hold_mask = torch.rand(
                 (batch_size, channels, seq_len),
                 generator=generator,
                 device=device,
             )  # [B, C, L]
-            hold_mask = hold_mask < float(hold_prob)  # [B, C, L]
+            hold_mask = hold_mask < hold_prob[:, None, None]  # [B, C, L]
 
         return {
             "dropout_mask": dropout_mask,
@@ -210,15 +274,72 @@ class MissingnessView(View):
         )  # [1]
         mask_seed = int(mask_seed.item())
 
+        dropout_prob = sampler_sample(
+            sampler=self.dropout_prob_sampler,
+            shape=(batch_size,),
+            rng=generator,
+            device=input_state.x.device,
+            dtype=torch.float32,
+            name="dropout_prob",
+        )  # [B]
+        gap_prob = sampler_sample(
+            sampler=self.gap_prob_sampler,
+            shape=(batch_size,),
+            rng=generator,
+            device=input_state.x.device,
+            dtype=torch.float32,
+            name="gap_prob",
+        )  # [B]
+        hold_prob = sampler_sample(
+            sampler=self.hold_prob_sampler,
+            shape=(batch_size,),
+            rng=generator,
+            device=input_state.x.device,
+            dtype=torch.float32,
+            name="hold_prob",
+        )  # [B]
+        gap_length_samples, gap_length_value = sampler_sample_scalar(
+            sampler=self.gap_length_sampler,
+            rng=generator,
+            device=input_state.x.device,
+            dtype=torch.int64,
+            name="gap_length",
+        )  # [1]
+        if torch.any((dropout_prob < 0.0) | (dropout_prob > 1.0)):
+            raise ValueError("dropout_prob must be in [0, 1] for all samples.")
+        if torch.any((gap_prob < 0.0) | (gap_prob > 1.0)):
+            raise ValueError("gap_prob must be in [0, 1] for all samples.")
+        if torch.any((hold_prob < 0.0) | (hold_prob > 1.0)):
+            raise ValueError("hold_prob must be in [0, 1] for all samples.")
+        if isinstance(gap_length_value, bool):
+            raise ValueError("gap_length must be an integer.")
+        gap_length = int(gap_length_value)
+        if gap_length < 0:
+            raise ValueError("gap_length must be non-negative.")
+
+        samples = {
+            "dropout_prob": dropout_prob,
+            "gap_prob": gap_prob,
+            "gap_length": gap_length_samples,
+            "hold_prob": hold_prob,
+        }
+        spec = {
+            "dropout_prob": self.dropout_prob_sampler.spec(),
+            "gap_prob": self.gap_prob_sampler.spec(),
+            "gap_length": self.gap_length_sampler.spec(),
+            "hold_prob": self.hold_prob_sampler.spec(),
+        }
         meta = {
             "view": "MissingnessView",
             "seed": seed,
             "mask_seed": mask_seed,
             "mask_version": 1,
-            "dropout_prob": self.dropout_prob,
-            "gap_prob": self.gap_prob,
-            "gap_length": self.gap_length,
-            "hold_prob": self.hold_prob,
+            "dropout_prob": dropout_prob,
+            "gap_prob": gap_prob,
+            "gap_length": gap_length_samples,
+            "hold_prob": hold_prob,
+            "samples": samples,
+            "spec": spec,
             "process": process_meta,
         }
 

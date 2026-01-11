@@ -3,6 +3,7 @@ from __future__ import annotations
 import torch
 
 from ..core.events import EventBatch, EventSchema
+from ..core.samplers import SamplerLike, sampler_from_value, sampler_sample
 from ..core.utils import SAMPLES_PREFIX
 from .graph import ProcessNode, ProcessState
 
@@ -103,8 +104,7 @@ class SingleEventNode(ProcessNode):
         type_name: str,
         time_min: int,
         time_max: int,
-        amplitude_min: float,
-        amplitude_max: float,
+        amplitude: SamplerLike[float],
         amplitude_param: str,
         out_key: str,
     ) -> None:
@@ -118,8 +118,6 @@ class SingleEventNode(ProcessNode):
             raise ValueError("time_max must be >= time_min.")
         if time_max > seq_len - 1:
             raise ValueError("time_max must be <= seq_len - 1.")
-        if amplitude_max < amplitude_min:
-            raise ValueError("amplitude_max must be >= amplitude_min.")
         if not out_key:
             raise ValueError("out_key must be non-empty.")
 
@@ -128,8 +126,7 @@ class SingleEventNode(ProcessNode):
         self.type_id = schema.type_id(type_name)
         self.time_min = time_min
         self.time_max = time_max
-        self.amplitude_min = amplitude_min
-        self.amplitude_max = amplitude_max
+        self.amplitude_sampler = sampler_from_value(amplitude, name="amplitude")
         self.amplitude_index = schema.param_id(amplitude_param)
         self.out_key = out_key
 
@@ -163,12 +160,15 @@ class SingleEventNode(ProcessNode):
             device=state.device,
             dtype=torch.float32,
         )  # [B, 1, P]
-        amplitude = torch.rand(
-            (state.batch_size, 1),
-            generator=rng,
+        amplitude_base = sampler_sample(
+            sampler=self.amplitude_sampler,
+            shape=(state.batch_size,),
+            rng=rng,
             device=state.device,
-        )  # [B, 1]
-        amplitude = self.amplitude_min + (self.amplitude_max - self.amplitude_min) * amplitude  # [B, 1]
+            dtype=torch.float32,
+            name="amplitude",
+        )  # [B]
+        amplitude = amplitude_base[:, None]  # [B, 1]
         params[:, :, self.amplitude_index] = amplitude
 
         mask = torch.ones(
@@ -196,15 +196,14 @@ class EventTrainNode(ProcessNode):
         self,
         *,
         seq_len: int,
-        num_events: int,
+        num_events: int | str,
         schema: EventSchema,
         mode: str,
         type_label_key: str | None,
         type_id: int | None,
-        amplitude_min: float,
-        amplitude_max: float,
+        amplitude: SamplerLike[float],
         amplitude_param: str,
-        missed_gap_factor: float,
+        missed_gap_factor: SamplerLike[float],
         out_key: str,
         centers_out_key: str,
     ) -> None:
@@ -212,14 +211,12 @@ class EventTrainNode(ProcessNode):
         super().__init__()
         if seq_len <= 0:
             raise ValueError(f"seq_len must be positive, got {seq_len}.")
-        if num_events <= 0:
+        if isinstance(num_events, int) and num_events <= 0:
             raise ValueError(f"num_events must be positive, got {num_events}.")
+        if isinstance(num_events, str) and not num_events:
+            raise ValueError("num_events key must be non-empty.")
         if mode not in {"regular", "irregular", "missed_beat"}:
             raise ValueError(f"mode must be regular/irregular/missed_beat, got {mode}.")
-        if amplitude_max < amplitude_min:
-            raise ValueError("amplitude_max must be >= amplitude_min.")
-        if missed_gap_factor <= 1:
-            raise ValueError("missed_gap_factor must be > 1.")
         if (type_label_key is None) == (type_id is None):
             raise ValueError("Provide exactly one of type_label_key or type_id.")
         if not out_key or not centers_out_key:
@@ -231,14 +228,45 @@ class EventTrainNode(ProcessNode):
         self.mode = mode
         self.type_label_key = type_label_key
         self.type_id = type_id
-        self.amplitude_min = amplitude_min
-        self.amplitude_max = amplitude_max
+        self.amplitude_sampler = sampler_from_value(amplitude, name="amplitude")
         self.amplitude_index = schema.param_id(amplitude_param)
-        self.missed_gap_factor = missed_gap_factor
+        self.missed_gap_factor_sampler = sampler_from_value(
+            missed_gap_factor, name="missed_gap_factor"
+        )
         self.out_key = out_key
         self.centers_out_key = centers_out_key
 
-    def _resolve_type_ids(self, state: ProcessState) -> torch.Tensor:
+    def _resolve_num_events(self, state: ProcessState) -> int:
+        """Resolve num_events from a constant or state key."""
+        if isinstance(self.num_events, str):
+            if self.num_events not in state.data:
+                raise ValueError(f"num_events key '{self.num_events}' not found in state.")
+            value = state.data[self.num_events]
+            if isinstance(value, torch.Tensor):
+                if value.numel() != 1:
+                    raise ValueError(
+                        "num_events must be a scalar when provided as a tensor. "
+                        f"Got shape {value.shape}."
+                    )
+                raw_value = value.item()
+            elif isinstance(value, (int, float)):
+                raw_value = value
+            else:
+                raise TypeError(
+                    "num_events must be an int or 0-dim tensor when provided by key. "
+                    f"Got {type(value).__name__}."
+                )
+        else:
+            raw_value = self.num_events
+
+        if isinstance(raw_value, float) and not raw_value.is_integer():
+            raise ValueError(f"num_events must be an integer, got {raw_value}.")
+        num_events = int(raw_value)
+        if num_events <= 0:
+            raise ValueError(f"num_events must be positive, got {num_events}.")
+        return num_events
+
+    def _resolve_type_ids(self, state: ProcessState, num_events: int) -> torch.Tensor:
         """Resolve per-sample type ids from labels or a fixed id."""
         if self.type_label_key is not None:
             if self.type_label_key in state.y:
@@ -254,11 +282,11 @@ class EventTrainNode(ProcessNode):
                     "type_label must have shape [B]. "
                     f"Got {type_idx.shape}, batch_size={state.batch_size}."
                 )
-            type_ids = type_idx[:, None].expand(state.batch_size, self.num_events)  # [B, N]
+            type_ids = type_idx[:, None].expand(state.batch_size, num_events)  # [B, N]
             return type_ids.to(torch.int64)
 
         type_ids = torch.full(
-            (state.batch_size, self.num_events),
+            (state.batch_size, num_events),
             int(self.type_id),
             device=state.device,
             dtype=torch.int64,
@@ -269,9 +297,11 @@ class EventTrainNode(ProcessNode):
         """Generate event centers and assemble an EventBatch."""
         self._record_seed(state, rng)
 
-        base_interval = 1.0 / (self.num_events + 1)
+        num_events = self._resolve_num_events(state)
+
+        base_interval = 1.0 / (num_events + 1)
         base_intervals = torch.full(
-            (state.batch_size, self.num_events + 1),
+            (state.batch_size, num_events + 1),
             fill_value=base_interval,
             device=state.device,
             dtype=torch.float32,
@@ -288,28 +318,38 @@ class EventTrainNode(ProcessNode):
             intervals = base_intervals  # [B, N+1]
         elif self.mode == "irregular":
             random_intervals = torch.rand(
-                (state.batch_size, self.num_events + 1),
+                (state.batch_size, num_events + 1),
                 generator=rng,
                 device=state.device,
             )  # [B, N+1]
             random_intervals = random_intervals / random_intervals.sum(dim=1, keepdim=True)  # [B, N+1]
             intervals = random_intervals
         else:
+            missed_gap_factor = sampler_sample(
+                sampler=self.missed_gap_factor_sampler,
+                shape=(state.batch_size,),
+                rng=rng,
+                device=state.device,
+                dtype=torch.float32,
+                name="missed_gap_factor",
+            )  # [B]
+            if torch.any(missed_gap_factor <= 1):
+                raise ValueError("missed_gap_factor must be > 1 for all samples.")
             missed_indices = torch.randint(
                 0,
-                self.num_events + 1,
+                num_events + 1,
                 (state.batch_size,),
                 generator=rng,
                 device=state.device,
             )  # [B]
             missed_multipliers = torch.ones(
-                (state.batch_size, self.num_events + 1),
+                (state.batch_size, num_events + 1),
                 device=state.device,
             )  # [B, N+1]
             missed_multipliers.scatter_(
                 1,
                 missed_indices[:, None],
-                self.missed_gap_factor,
+                missed_gap_factor[:, None],
             )
             missed_intervals = base_intervals * missed_multipliers  # [B, N+1]
             missed_intervals = missed_intervals / missed_intervals.sum(dim=1, keepdim=True)  # [B, N+1]
@@ -325,25 +365,27 @@ class EventTrainNode(ProcessNode):
         centers_normalized, _ = centers_normalized.sort(dim=1)  # [B, N]
         centers = centers_normalized * (self.seq_len - 1)  # [B, N]
 
-        type_ids = self._resolve_type_ids(state)  # [B, N]
+        type_ids = self._resolve_type_ids(state, num_events)  # [B, N]
 
-        amplitude = torch.rand(
-            (state.batch_size, 1),
-            generator=rng,
+        amplitude_base = sampler_sample(
+            sampler=self.amplitude_sampler,
+            shape=(state.batch_size,),
+            rng=rng,
             device=state.device,
-        )  # [B, 1]
-        amplitude = self.amplitude_min + (self.amplitude_max - self.amplitude_min) * amplitude  # [B, 1]
-        amplitude = amplitude.expand(state.batch_size, self.num_events)  # [B, N]
+            dtype=torch.float32,
+            name="amplitude",
+        )  # [B]
+        amplitude = amplitude_base[:, None].expand(state.batch_size, num_events)  # [B, N]
 
         params = torch.zeros(
-            (state.batch_size, self.num_events, len(self.schema.param_names)),
+            (state.batch_size, num_events, len(self.schema.param_names)),
             device=state.device,
             dtype=torch.float32,
         )  # [B, N, P]
         params[:, :, self.amplitude_index] = amplitude
 
         mask = torch.ones(
-            (state.batch_size, self.num_events),
+            (state.batch_size, num_events),
             device=state.device,
             dtype=torch.bool,
         )  # [B, N]
@@ -362,10 +404,23 @@ class EventTrainNode(ProcessNode):
         state.data[self.out_key] = events
         state.data[self.centers_out_key] = centers
 
+        if self.mode != "missed_beat":
+            missed_gap_factor = sampler_sample(
+                sampler=self.missed_gap_factor_sampler,
+                shape=(state.batch_size,),
+                rng=rng,
+                device=state.device,
+                dtype=torch.float32,
+                name="missed_gap_factor",
+            )  # [B]
+            if torch.any(missed_gap_factor <= 1):
+                raise ValueError("missed_gap_factor must be > 1 for all samples.")
+
         samples_base = f"{SAMPLES_PREFIX}/EventTrainNode:{self.out_key}"
         state.data[f"{samples_base}/intervals"] = intervals
         state.data[f"{samples_base}/missed_indices"] = missed_indices
         state.data[f"{samples_base}/phase_offset"] = phase_offset
+        state.data[f"{samples_base}/missed_gap_factor"] = missed_gap_factor
         return state
 
 
@@ -574,16 +629,14 @@ class TimeShiftNode(ProcessNode):
 class TimeJitterNode(ProcessNode):
     """Add Gaussian jitter to event times."""
 
-    def __init__(self, *, in_key: str, out_key: str, jitter_std: float) -> None:
+    def __init__(self, *, in_key: str, out_key: str, jitter_std: SamplerLike[float]) -> None:
         """Initialize a time jitter node."""
         super().__init__()
-        if jitter_std < 0:
-            raise ValueError(f"jitter_std must be non-negative, got {jitter_std}.")
         if not in_key or not out_key:
             raise ValueError("in_key and out_key must be non-empty.")
         self.in_key = in_key
         self.out_key = out_key
-        self.jitter_std = jitter_std
+        self.jitter_std_sampler = sampler_from_value(jitter_std, name="jitter_std")
 
     def forward(self, state: ProcessState, *, rng: torch.Generator) -> ProcessState:
         """Apply time jitter to events."""
@@ -594,12 +647,22 @@ class TimeJitterNode(ProcessNode):
                 f"TimeJitterNode expects EventBatch at '{self.in_key}', got {type(events).__name__}."
             )
 
+        jitter_std = sampler_sample(
+            sampler=self.jitter_std_sampler,
+            shape=(state.batch_size,),
+            rng=rng,
+            device=events.times.device,
+            dtype=torch.float32,
+            name="jitter_std",
+        )  # [B]
+        if torch.any(jitter_std < 0):
+            raise ValueError("jitter_std must be non-negative for all samples.")
         noise = torch.randn(
             events.times.shape,
             generator=rng,
             device=events.times.device,
         )  # [B, E]
-        time_jitter = noise * self.jitter_std  # [B, E]
+        time_jitter = noise * jitter_std[:, None]  # [B, E]
         jittered = events.times + time_jitter  # [B, E]
         state.data[self.out_key] = EventBatch(
             times=jittered,
@@ -611,6 +674,7 @@ class TimeJitterNode(ProcessNode):
         )
         samples_base = f"{SAMPLES_PREFIX}/TimeJitterNode:{self.out_key}"
         state.data[f"{samples_base}/time_jitter"] = time_jitter
+        state.data[f"{samples_base}/jitter_std"] = jitter_std
         return state
 
 
