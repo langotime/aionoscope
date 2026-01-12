@@ -33,8 +33,8 @@ from .processes.nodes import (
 from .processes.trend_season import TrendSeasonAnomalyProcess
 from .views.ecg_leads import ECGLeadsView
 from .views.events import EventImpulseView, EventStreamView, KernelConvView
-from .views.noise import BaselineWanderView, NoiseView, NormalizeView
-from .views.units import ClippingView, UnitsAbsoluteView, UnitsPercentOfCapacityView
+from .views.noise import BaselineWanderView, NoiseView
+from .views.units import ClippingView, NormalizeView, UnitsAbsoluteView, UnitsPercentOfCapacityView
 from .views.sampling import SamplingAggregationView
 from .views.missingness import MissingnessView
 from .views.base import View, ViewChain

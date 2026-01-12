@@ -8,7 +8,8 @@ from toyts.kernels.pqrst import make_pqrst_kernel_bank, pqrst_kernel_size
 from toyts.processes.pulse_train import PulseTrainProcess
 from toyts.views.ecg_leads import ECGLeadsView
 from toyts.views.events import EventImpulseView, KernelConvView
-from toyts.views.noise import BaselineWanderView, NoiseView, NormalizeView
+from toyts.views.noise import BaselineWanderView, NoiseView
+from toyts.views.units import NormalizeView
 from toyts.views.sampling import SamplingAggregationView
 
 

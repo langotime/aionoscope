@@ -202,7 +202,7 @@ from toyts.views.ecg_leads import ECGLeadsView
 from toyts.views.events import EventImpulseView, KernelConvView
 from toyts.views.noise import NoiseView, BaselineWanderView
 from toyts.views.sampling import SamplingAggregationView
-from toyts.views.noise import NormalizeView
+from toyts.views.units import NormalizeView
 
 spacing = (process.seq_len - 1) / (process.num_pulses + 1)
 kernel_size = pqrst_kernel_size(spacing=spacing, support_sigma=6.0)

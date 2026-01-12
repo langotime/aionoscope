@@ -15,7 +15,8 @@ from toyts.processes.nodes import EventTrainNode, SampleLabelsNode, SetLabelsNod
 from toyts.views.ecg_leads import ECGLeadsView
 from toyts.views.events import EventImpulseView, EventStreamView, KernelConvView
 from toyts.views.missingness import MissingnessView
-from toyts.views.noise import BaselineWanderView, NoiseView, NormalizeView
+from toyts.views.noise import BaselineWanderView, NoiseView
+from toyts.views.units import NormalizeView
 from toyts.views.sampling import SamplingAggregationView
 
 

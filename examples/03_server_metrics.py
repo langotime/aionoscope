@@ -4,9 +4,9 @@ import torch
 
 from toyts.core.pipeline import SynthPipeline
 from toyts.processes.trend_season import TrendSeasonAnomalyProcess
-from toyts.views.noise import NormalizeView
 from toyts.views.units import (
     ClippingView,
+    NormalizeView,
     UnitsAbsoluteView,
     UnitsPercentOfCapacityView,
 )
