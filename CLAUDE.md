@@ -94,3 +94,4 @@ This repo contains source code of the ToyTS library - PyTorch-native online synt
 - Before submitting a plan for a review you MUST:
   - Study the existing code base to make sure the resulting library API and library internals are coherent, lean, clean, and logical as a whole.
   - Check if any of the code you want to add already exist in the library but is a part of a larger components - propose how to refactor the code to make it more composable.
+  - Add a section to the plan, describing how does the change affect the library documentation and all changes required to the documentation to keep the library easy to use.
