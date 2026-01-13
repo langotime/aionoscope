@@ -37,10 +37,9 @@ This repo contains source code of the ToyTS library - PyTorch-native online synt
 
 ## Code Maintenance Principles
 - Always have only one version of the code. If something can be done in two-three ways, choose the best one (google, test or ask me) and implement. 
-- When reimplementing existing code, don't keep it "for fallback" - instead, use unittests to make sure the new code is performing the same way or better
+- When reimplementing existing code, don't keep it "for fallback" - instead, use unittests to make sure the new code is performing the same way or better.
 - ALWAYS run unittests after changing the code and before you report that the job is done.
 - Put unittests into the tests/ subdirectory.
-- Use prefixing for tool naming. I.e. a tool to get an item from a knowledge base should be kb_get_item(), not get_item_from_kb().
 
 ## Development Best Practices
 - ALWAYS clean up temprorary files.
@@ -91,3 +90,7 @@ This repo contains source code of the ToyTS library - PyTorch-native online synt
 ## Planning
 - Write plans to files in Markdown.
 - Put plans into the plans/ subridectory with a unique descriptive name and .md file type. Start each file name with "N_" prefix where N is a unique increasing counter.
+- Don't be afraid to change the library existing code - we must maintain the library lean and clean, with KISS and DRY API and internals, easy to maintain.
+- Before submitting a plan for a review you MUST:
+  - Study the existing code base to make sure the resulting library API and library internals are coherent, lean, clean, and logical as a whole.
+  - Check if any of the code you want to add already exist in the library but is a part of a larger components - propose how to refactor the code to make it more composable.
