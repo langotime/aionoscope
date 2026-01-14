@@ -3,7 +3,7 @@ from __future__ import annotations
 import torch
 
 from ..core.events import EventBatch, EventSchema
-from ..core.samplers import SamplerLike, sampler_from_value, sampler_sample
+from ..core.samplers import ConstantSampler, SamplerLike, sampler_from_value, sampler_sample
 from ..core.utils import SAMPLES_PREFIX
 from .graph import ProcessNode, ProcessState
 
@@ -97,16 +97,16 @@ class EnableComponentsNode(ProcessNode):
     """Sample per-sample component enable masks.
 
     Writes `state.meta["enabled"][key] = bool[B]` for each component key. When
-    `num_enabled == 1`, also writes `state.y["component_id"] = int64[B]` with
-    label names in `state.meta["label_names"]["component_id"]`.
+    all samples have `num_enabled == 1`, also writes `state.y["component_id"] = int64[B]`
+    with label names in `state.meta["label_names"]["component_id"]`.
     """
 
-    def __init__(self, *, component_keys: list[str], num_enabled: int) -> None:
+    def __init__(self, *, component_keys: list[str], num_enabled: SamplerLike[int]) -> None:
         """Initialize enabled-mask sampling.
 
         Args:
             component_keys: Unique component identifiers.
-            num_enabled: Number of enabled components per sample (k-hot size).
+            num_enabled: Sampler for the number of enabled components per sample (k-hot size).
         """
         super().__init__()
         if not component_keys:
@@ -115,16 +115,23 @@ class EnableComponentsNode(ProcessNode):
             raise ValueError("component_keys must contain only non-empty strings.")
         if len(set(component_keys)) != len(component_keys):
             raise ValueError("component_keys must be unique.")
-        if num_enabled <= 0:
-            raise ValueError(f"num_enabled must be positive, got {num_enabled}.")
-        if num_enabled > len(component_keys):
-            raise ValueError(
-                "num_enabled must be <= len(component_keys). "
-                f"Got num_enabled={num_enabled}, len(component_keys)={len(component_keys)}."
-            )
 
         self.component_keys = list(component_keys)
-        self.num_enabled = int(num_enabled)
+        self.num_enabled_sampler = sampler_from_value(num_enabled, name="num_enabled")
+        if isinstance(self.num_enabled_sampler, ConstantSampler):
+            value = self.num_enabled_sampler.value
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise ValueError(
+                    "EnableComponentsNode num_enabled must be an integer. "
+                    f"Got constant {value!r} ({type(value).__name__})."
+                )
+            if value <= 0:
+                raise ValueError(f"num_enabled must be positive, got {value}.")
+            if value > len(component_keys):
+                raise ValueError(
+                    "num_enabled must be <= len(component_keys). "
+                    f"Got num_enabled={value}, len(component_keys)={len(component_keys)}."
+                )
 
     def forward(self, state: ProcessState, *, rng: torch.Generator) -> ProcessState:
         """Sample k-hot masks and store them in process meta."""
@@ -137,26 +144,42 @@ class EnableComponentsNode(ProcessNode):
 
         batch_size = state.batch_size
         num_components = len(self.component_keys)
-        if self.num_enabled == 1:
-            indices = torch.randint(
-                0,
-                num_components,
-                (batch_size,),
-                generator=rng,
-                device=state.device,
-            )  # [B]
-            enabled_matrix = torch.zeros(
-                (batch_size, num_components),
-                device=state.device,
-                dtype=torch.bool,
-            )  # [B, N]
-            enabled_matrix.scatter_(
-                1,
-                indices[:, None],
-                torch.ones((batch_size, 1), device=state.device, dtype=torch.bool),
+        k = sampler_sample(
+            sampler=self.num_enabled_sampler,
+            shape=(batch_size,),
+            rng=rng,
+            device=state.device,
+            dtype=torch.int64,
+            name="num_enabled",
+        )  # [B]
+        if not torch.all((k >= 1) & (k <= num_components)):
+            k_min = int(k.min().item())
+            k_max = int(k.max().item())
+            raise ValueError(
+                "EnableComponentsNode sampled num_enabled out of range. "
+                f"Expected 1 <= num_enabled <= {num_components}. Got min={k_min}, max={k_max}."
             )
 
-            state.y["component_id"] = indices.to(torch.int64)  # [B]
+        scores = torch.rand(
+            (batch_size, num_components),
+            generator=rng,
+            device=state.device,
+            dtype=torch.float32,
+        )  # [B, N]
+        order = scores.argsort(dim=1, descending=True)  # [B, N]
+        rank = torch.arange(num_components, device=state.device, dtype=torch.int64)[None, :]  # [1, N]
+        keep = rank < k[:, None]  # [B, N]
+
+        enabled_matrix = torch.zeros(
+            (batch_size, num_components),
+            device=state.device,
+            dtype=torch.bool,
+        )  # [B, N]
+        enabled_matrix.scatter_(1, order, keep)
+
+        state.y["component_count"] = k  # [B]
+        if torch.all(k == 1):
+            state.y["component_id"] = order[:, 0].to(torch.int64)  # [B]
             label_names = state.meta.setdefault("label_names", {})
             if "component_id" in label_names and label_names["component_id"] != self.component_keys:
                 raise ValueError(
@@ -164,27 +187,6 @@ class EnableComponentsNode(ProcessNode):
                     "with different classes."
                 )
             label_names["component_id"] = list(self.component_keys)
-        else:
-            scores = torch.rand(
-                (batch_size, num_components),
-                generator=rng,
-                device=state.device,
-                dtype=torch.float32,
-            )  # [B, N]
-            topk = scores.topk(k=self.num_enabled, dim=1).indices  # [B, K]
-            enabled_matrix = torch.zeros(
-                (batch_size, num_components),
-                device=state.device,
-                dtype=torch.bool,
-            )  # [B, N]
-            enabled_matrix.scatter_(1, topk, torch.ones_like(topk, dtype=torch.bool))
-
-        state.y["component_count"] = torch.full(
-            (batch_size,),
-            fill_value=self.num_enabled,
-            device=state.device,
-            dtype=torch.int64,
-        )  # [B]
 
         enabled = state.meta.get("enabled")
         if enabled is None:

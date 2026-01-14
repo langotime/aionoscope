@@ -36,7 +36,7 @@ from toyts.views.periodic import (
     SineWaveView,
     SquareWaveView,
 )
-from toyts import UniformSampler
+from toyts import RandIntSampler, SamplerLike, UniformSampler
 
 
 def build_basic_components_process(
@@ -44,7 +44,7 @@ def build_basic_components_process(
     seq_len: int,
     sample_rate_hz: float,
     component_keys: list[str],
-    num_enabled: int,
+    num_enabled: SamplerLike[int],
 ) -> ProcessGraph:
     schema = EventSchema(
         type_names=["spike", "level_change", "gaussian"],
@@ -127,7 +127,7 @@ def plot_grid(
     *,
     x: torch.Tensor,
     enabled: dict[str, torch.Tensor],
-    component_count: int,
+    component_count: int | torch.Tensor,
     max_plots: int = 16,
 ) -> plt.Figure:
     if x.ndim != 3:
@@ -135,6 +135,20 @@ def plot_grid(
     if x.shape[1] != 1:
         raise ValueError(f"Expected x to have shape [B, 1, L], got {tuple(x.shape)}.")
     batch_size, _, seq_len = x.shape
+    if isinstance(component_count, torch.Tensor):
+        if component_count.shape != (batch_size,):
+            raise ValueError(
+                "Expected component_count to have shape [B]. "
+                f"Got {tuple(component_count.shape)}, batch_size={batch_size}."
+            )
+        if component_count.dtype != torch.int64:
+            raise ValueError(
+                "Expected component_count to have dtype torch.int64. "
+                f"Got {component_count.dtype}."
+            )
+        component_count_cpu = component_count.detach().cpu()  # [B]
+    else:
+        component_count_cpu = None
     num_plots = min(max_plots, batch_size)
     rows = int(math.floor(math.sqrt(num_plots)))
     cols = int(math.ceil(num_plots / rows))
@@ -150,7 +164,11 @@ def plot_grid(
 
         active = [name for name, mask in enabled.items() if bool(mask[plot_idx].item())]
         active_str = "+".join(active) if active else "none"
-        ax.set_title(f"{active_str} (k={component_count})", fontsize=9)
+        if component_count_cpu is not None:
+            k = int(component_count_cpu[plot_idx].item())
+        else:
+            k = int(component_count)
+        ax.set_title(f"{active_str} (k={k})", fontsize=9)
         ax.grid(True, linestyle="--", linewidth=0.4, alpha=0.7)
 
     for ax in axes_list[num_plots:]:
@@ -188,16 +206,19 @@ def main() -> None:
         "gaussian",
     ]
 
-    # Dataset composition:
+    # Dataset composition (N = len(component_keys)):
     # - num_enabled = 1: single component per sample
-    # - 1 < num_enabled < len(component_keys): random k-hot mix per sample
-    # - num_enabled = len(component_keys): all components per sample
-    num_enabled = 1
-    if num_enabled < 1 or num_enabled > len(component_keys):
-        raise ValueError(
-            "num_enabled must satisfy 1 <= num_enabled <= len(component_keys). "
-            f"Got num_enabled={num_enabled}, len(component_keys)={len(component_keys)}."
-        )
+    # - num_enabled = k (int): fixed k-hot mix per sample
+    # - num_enabled = RandIntSampler(1, N + 1): variable per-sample k-hot size (mixes 1..N)
+    # - num_enabled = N: all components per sample
+    num_enabled: SamplerLike[int] = 1
+    # num_enabled = RandIntSampler(1, len(component_keys) + 1)
+    if isinstance(num_enabled, int):
+        if num_enabled < 1 or num_enabled > len(component_keys):
+            raise ValueError(
+                "num_enabled must satisfy 1 <= num_enabled <= len(component_keys). "
+                f"Got num_enabled={num_enabled}, len(component_keys)={len(component_keys)}."
+            )
 
     process = build_basic_components_process(
         seq_len=seq_len,
@@ -307,7 +328,7 @@ def main() -> None:
     fig = plot_grid(
         x=obs.x,
         enabled=enabled,
-        component_count=num_enabled,
+        component_count=obs.y["component_count"],
         max_plots=batch_size,
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)

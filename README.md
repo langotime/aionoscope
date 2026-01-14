@@ -28,13 +28,14 @@ The library is built around a unidirectional flow:
 *   **GPU-First**: All generation happens in PyTorch tensors. No Python loops over batch dimensions.
 *   **SSL-Ready**: Trivial generation of multi-view batches (e.g., `{"clean": ..., "noisy": ...}`) sharing the same latent state.
 *   **Anti-Shortcut**: Nuisance factors (noise, amplitude) are handled by Views, while labels are derived from the Process, preventing trivial shortcuts.
-*   **Per-sample component mixing**: Processes can write `LatentState.meta["enabled"][key]` masks (`bool[B]`) and component Views can gate themselves with `enabled_key=...`, so a single static `ViewChain` can produce 1/2/3/... component mixtures without branching pipelines.
+*   **Per-sample component mixing**: Processes can write `LatentState.meta["enabled"][key]` masks (`bool[B]`) and component Views can gate themselves with `enabled_key=...`, so a single static `ViewChain` can produce heterogeneous 1/2/3/... component mixtures without branching pipelines (including mixed component counts within one batch via `EnableComponentsNode(num_enabled=...)`).
 *   **Multi-event rendering**: `EventRenderView` materializes simple event types by summing over events, so mixtures like “spike + gaussian bump + trend” remain straightforward and reproducible.
 *   **Modular**: Components are composable `nn.Module`s.
 
 ## Why These Features Exist
 
 *   **Static pipelines**: `nn.Sequential` / `ViewChain` are fixed graphs, but research often needs per-sample “recipes” (some samples have 1 component, others have 2–3). `enabled_key` makes that possible without branching the pipeline.
+*   **Variable mixture complexity**: Some benchmarks need to mix “easy” (single-component) and “hard” (multi-component) samples in the same dataset stream; sampling `EnableComponentsNode(num_enabled=...)` per sample enables this without branching pipelines or dataloaders.
 *   **Stable randomness**: When `enabled_key` varies across samples, `ViewChain` splits the RNG per view so turning one component on/off does not change randomness in later components.
 *   **Composable event mixtures**: Processes already merge multiple event streams; `EventRenderView` exists so those merged streams can be rendered additively (multiple events per sample) without writing a custom renderer.
 

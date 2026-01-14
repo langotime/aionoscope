@@ -98,8 +98,14 @@ Why this exists:
 
 *   **Single pipeline, many recipes**: chain all components once, then select which ones are active per sample.
 *   **Reproducibility under gating**: `ViewChain` splits the RNG per view, so turning one component on/off does not change the random stream used by later views.
+*   **Variable mixture complexity**: sample `EnableComponentsNode(num_enabled=...)` per sample to mix different k-hot sizes (easy → hard) within the same batch/stream.
 
-For convenient mask sampling, use `EnableComponentsNode(component_keys=[...], num_enabled=k)` and see `examples/06_basic_components.py`.
+For convenient mask sampling, use `EnableComponentsNode(component_keys=[...], num_enabled=...)`:
+
+*   `num_enabled=int` → fixed k-hot size for the whole batch
+*   `num_enabled=SamplerLike[int]` (e.g. `RandIntSampler(1, N + 1)`) → per-sample k-hot sizes within the same batch
+
+See `examples/06_basic_components.py` for a minimal dataset using enabled masks.
 
 ## Multi-Event Rendering (Summing Over Events)
 
