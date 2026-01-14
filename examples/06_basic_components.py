@@ -19,6 +19,7 @@ from toyts import (
     QuadraticTrendView,
     SigmoidTrendView,
     SingleEventNode,
+    SynthPipeline,
     UnionEventsNode,
     ViewChain,
 )
@@ -168,8 +169,6 @@ def main() -> None:
     batch_size = 16
     seed = 1234
 
-    num_enabled = 1
-
     component_keys = [
         "constant",
         "gaussian_noise",
@@ -188,6 +187,17 @@ def main() -> None:
         "level_change",
         "gaussian",
     ]
+
+    # Dataset composition:
+    # - num_enabled = 1: single component per sample
+    # - 1 < num_enabled < len(component_keys): random k-hot mix per sample
+    # - num_enabled = len(component_keys): all components per sample
+    num_enabled = 1
+    if num_enabled < 1 or num_enabled > len(component_keys):
+        raise ValueError(
+            "num_enabled must satisfy 1 <= num_enabled <= len(component_keys). "
+            f"Got num_enabled={num_enabled}, len(component_keys)={len(component_keys)}."
+        )
 
     process = build_basic_components_process(
         seq_len=seq_len,
@@ -270,8 +280,6 @@ def main() -> None:
         ),
     )
 
-    from toyts import SynthPipeline
-
     pipeline = SynthPipeline(process=process, views={"mix": view})
     pipeline.to(device)
 
@@ -288,7 +296,6 @@ def main() -> None:
     obs = batch["mix"]
     print("x:", tuple(obs.x.shape))
     print("y keys:", sorted(obs.y.keys()))
-    print("enabled keys:", len(obs.meta["process"]["enabled"]))
 
     enabled = obs.meta["process"]["enabled"]
     for name in component_keys:
