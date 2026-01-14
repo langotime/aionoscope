@@ -16,11 +16,14 @@ from .core.samplers import (
 from .core.types import LatentState, Observation
 from .kernels.pqrst import make_pqrst_kernel_bank, pqrst_kernel_size
 from .processes.curriculum import CurriculumProcess
+from .processes.constant import ConstantLatentNode, ConstantProcess
 from .processes.pulse_train import PulseTrainProcess
 from .processes.graph import ProcessChain, ProcessGraph, ProcessOp, ProcessState, Scope, Seq, Switch, Parallel
 from .processes.nodes import (
     DedupeEventsNode,
+    EnableComponentsNode,
     EventTrainNode,
+    GateEventsByEnabledNode,
     GateEventsNode,
     MapTypeNode,
     SampleLabelsNode,
@@ -33,7 +36,32 @@ from .processes.nodes import (
 from .processes.trend_season import TrendSeasonAnomalyProcess
 from .views.ecg_leads import ECGLeadsView
 from .views.events import EventImpulseView, EventStreamView, KernelConvView
-from .views.noise import BaselineWanderView, NoiseView
+from .views.events_basic import EventRenderView
+from .views.noise import (
+    BaselineWanderView,
+    BrownNoiseView,
+    ColoredNoiseView,
+    GaussianNoiseView,
+    LaplaceNoiseView,
+    RandomWalkNoiseView,
+    UniformNoiseView,
+)
+from .views.periodic import (
+    ChirpView,
+    DampedSineWaveView,
+    SawtoothWaveView,
+    SineWaveView,
+    SquareWaveView,
+    TriangleWaveView,
+)
+from .views.trend import (
+    ExponentialTrendView,
+    LinearTrendView,
+    LogTrendView,
+    PiecewiseLinearTrendView,
+    QuadraticTrendView,
+    SigmoidTrendView,
+)
 from .views.units import ClippingView, NormalizeView, UnitsAbsoluteView, UnitsPercentOfCapacityView
 from .views.sampling import SamplingAggregationView
 from .views.missingness import MissingnessView
@@ -42,42 +70,62 @@ from .processes.base import Process
 
 __all__ = [
     "BaselineWanderView",
+    "BrownNoiseView",
     "BernoulliSampler",
     "CategoricalSampler",
+    "ChirpView",
     "ChoiceSampler",
     "ClippingView",
+    "ColoredNoiseView",
+    "ConstantLatentNode",
+    "ConstantProcess",
     "ConstantSampler",
     "CurriculumProcess",
     "CurriculumSchedule",
+    "DampedSineWaveView",
     "ECGLeadsView",
     "DedupeEventsNode",
+    "EnableComponentsNode",
+    "ExponentialTrendView",
     "EventBatch",
     "EventImpulseView",
+    "EventRenderView",
     "EventSchema",
     "EventStreamView",
     "EventTrainNode",
+    "GaussianNoiseView",
+    "GateEventsByEnabledNode",
     "GateEventsNode",
     "KernelConvView",
+    "LaplaceNoiseView",
+    "LinearTrendView",
     "LogUniformSampler",
+    "LogTrendView",
     "LatentState",
     "MissingnessView",
     "MapTypeNode",
     "NormalSampler",
     "Parallel",
-    "NoiseView",
     "NormalizeView",
     "Observation",
+    "PiecewiseLinearTrendView",
     "Process",
     "ProcessChain",
     "ProcessGraph",
     "ProcessOp",
     "ProcessState",
     "PulseTrainProcess",
+    "QuadraticTrendView",
     "RandIntSampler",
+    "RandomWalkNoiseView",
+    "SawtoothWaveView",
     "Sampler",
     "SamplerLike",
     "SampleLabelsNode",
     "SetLabelsNode",
+    "SigmoidTrendView",
+    "SineWaveView",
+    "SquareWaveView",
     "Scope",
     "Seq",
     "SamplingAggregationView",
@@ -87,7 +135,9 @@ __all__ = [
     "TimeJitterNode",
     "TimeShiftNode",
     "TrendSeasonAnomalyProcess",
+    "TriangleWaveView",
     "UnionEventsNode",
+    "UniformNoiseView",
     "UnitsAbsoluteView",
     "UnitsPercentOfCapacityView",
     "UniformSampler",

@@ -12,8 +12,8 @@ from toyts import (
     ClippingView,
     ConstantSampler,
     LogUniformSampler,
+    GaussianNoiseView,
     MissingnessView,
-    NoiseView,
     NormalSampler,
     RandIntSampler,
     TrendSeasonAnomalyProcess,
@@ -149,7 +149,7 @@ def build_pipeline_views() -> list[tuple[str, object]]:
                 capacity_max=UniformSampler(2.0, 3.0),
             ),
         ),
-        ("noise", NoiseView(noise_std=LogUniformSampler(0.01, 0.1))),
+        ("noise", GaussianNoiseView(noise_std=LogUniformSampler(0.01, 0.1))),
         (
             "missingness",
             MissingnessView(

@@ -85,6 +85,31 @@ masks = MissingnessView.sample_masks(
 )
 ```
 
+## Runtime Component Gating (Enabled Masks)
+
+Many research datasets need **per-sample mixtures**: some samples contain 1 component, others contain 2–3 (trend + periodic + noise, etc.). A `ViewChain` / `nn.Sequential` is a static pipeline, so you cannot “remove” modules on a per-sample basis without building separate pipelines.
+
+ToyTS supports runtime per-sample gating via **enabled masks**:
+
+*   **Process side**: write `state.meta["enabled"][key] = bool[B]` for each component key.
+*   **View side**: component views accept `enabled_key=key` and gate their contribution using the corresponding `bool[B]` mask from process metadata (`Observation.meta["process"]` after the first view).
+
+Why this exists:
+
+*   **Single pipeline, many recipes**: chain all components once, then select which ones are active per sample.
+*   **Reproducibility under gating**: `ViewChain` splits the RNG per view, so turning one component on/off does not change the random stream used by later views.
+
+For convenient mask sampling, use `EnableComponentsNode(component_keys=[...], num_enabled=k)` and see `examples/06_basic_components.py`.
+
+## Multi-Event Rendering (Summing Over Events)
+
+Event streams are composable on the process side (generate multiple event sources, then merge them into one `EventBatch`). `EventRenderView` exists to make those merged streams easy to materialize into dense samples:
+
+*   **Input**: `LatentState.events` (an `EventBatch`) + a latent baseline signal.
+*   **Output**: an additive single-channel signal `[B, 1, L]` where **all valid events** (`mask == True`) contribute and are **summed**.
+
+This is useful for mixtures like “spike + gaussian bump + trend” where you want to keep the process as events (for labels and reproducibility), but still render a dense training signal.
+
 ## Process Graphs and Branching Examples
 
 Process graphs allow non-linear composition, which is hard to express as a simple chain. Typical branching/merging use cases:
@@ -200,7 +225,7 @@ from toyts.core.utils import utils_make_canonical_A0
 from toyts.kernels.pqrst import make_pqrst_kernel_bank, pqrst_kernel_size
 from toyts.views.ecg_leads import ECGLeadsView
 from toyts.views.events import EventImpulseView, KernelConvView
-from toyts.views.noise import NoiseView, BaselineWanderView
+from toyts.views.noise import GaussianNoiseView, BaselineWanderView
 from toyts.views.sampling import SamplingAggregationView
 from toyts.views.units import NormalizeView
 
@@ -225,14 +250,14 @@ views = {
         EventImpulseView(seq_len=process.seq_len, amplitude_param="amplitude", rounding="nearest"),
         KernelConvView(kernels=kernels, padding=padding),
         ECGLeadsView(A0=A0, jitter_std=0.05, max_delay=3),
-        NoiseView(noise_std=0.1),
+        GaussianNoiseView(noise_std=0.1),
         BaselineWanderView(amplitude_std=0.3, freq_min=0.05, freq_max=0.2),
     ),
     "normalized_and_resampled": torch.nn.Sequential(
         EventImpulseView(seq_len=process.seq_len, amplitude_param="amplitude", rounding="nearest"),
         KernelConvView(kernels=kernels, padding=padding),
         ECGLeadsView(A0=A0, jitter_std=0.05, max_delay=3),
-        NoiseView(noise_std=0.1),
+        GaussianNoiseView(noise_std=0.1),
         BaselineWanderView(amplitude_std=0.3, freq_min=0.05, freq_max=0.2),
         NormalizeView(),
         SamplingAggregationView(mode="mean", window=4),

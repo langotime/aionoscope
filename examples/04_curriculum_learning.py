@@ -15,7 +15,7 @@ from toyts.processes.nodes import EventTrainNode, SampleLabelsNode, SetLabelsNod
 from toyts.views.ecg_leads import ECGLeadsView
 from toyts.views.events import EventImpulseView, EventStreamView, KernelConvView
 from toyts.views.missingness import MissingnessView
-from toyts.views.noise import BaselineWanderView, NoiseView
+from toyts.views.noise import BaselineWanderView, GaussianNoiseView
 from toyts.views.units import NormalizeView
 from toyts.views.sampling import SamplingAggregationView
 
@@ -66,7 +66,7 @@ def main() -> None:
         "view1": torch.nn.Sequential(
             *event_head(),
             ECGLeadsView(A0=A0, jitter_std=0.05, max_delay=2),
-            NoiseView(noise_std=0.1),
+            GaussianNoiseView(noise_std=0.1),
             BaselineWanderView(amplitude_std=0.2, freq_min=0.1, freq_max=0.3),
             SamplingAggregationView(mode="downsample", stride=2),
             NormalizeView(),
@@ -74,7 +74,7 @@ def main() -> None:
         "view2": torch.nn.Sequential(
             *event_head(),
             ECGLeadsView(A0=A0, jitter_std=0.1, max_delay=4),
-            NoiseView(noise_std=0.15),
+            GaussianNoiseView(noise_std=0.15),
             BaselineWanderView(amplitude_std=0.4, freq_min=0.05, freq_max=0.2),
             MissingnessView(dropout_prob=0.05, gap_prob=0.1, gap_length=50, hold_prob=0.01),
             NormalizeView(),

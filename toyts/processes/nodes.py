@@ -93,6 +93,118 @@ class SetLabelsNode(ProcessNode):
         return state
 
 
+class EnableComponentsNode(ProcessNode):
+    """Sample per-sample component enable masks.
+
+    Writes `state.meta["enabled"][key] = bool[B]` for each component key. When
+    `num_enabled == 1`, also writes `state.y["component_id"] = int64[B]` with
+    label names in `state.meta["label_names"]["component_id"]`.
+    """
+
+    def __init__(self, *, component_keys: list[str], num_enabled: int) -> None:
+        """Initialize enabled-mask sampling.
+
+        Args:
+            component_keys: Unique component identifiers.
+            num_enabled: Number of enabled components per sample (k-hot size).
+        """
+        super().__init__()
+        if not component_keys:
+            raise ValueError("component_keys must be non-empty.")
+        if any(not key for key in component_keys):
+            raise ValueError("component_keys must contain only non-empty strings.")
+        if len(set(component_keys)) != len(component_keys):
+            raise ValueError("component_keys must be unique.")
+        if num_enabled <= 0:
+            raise ValueError(f"num_enabled must be positive, got {num_enabled}.")
+        if num_enabled > len(component_keys):
+            raise ValueError(
+                "num_enabled must be <= len(component_keys). "
+                f"Got num_enabled={num_enabled}, len(component_keys)={len(component_keys)}."
+            )
+
+        self.component_keys = list(component_keys)
+        self.num_enabled = int(num_enabled)
+
+    def forward(self, state: ProcessState, *, rng: torch.Generator) -> ProcessState:
+        """Sample k-hot masks and store them in process meta."""
+        self._record_seed(state, rng)
+        if state.device.type != rng.device.type:
+            raise ValueError(
+                "EnableComponentsNode rng device does not match state.device. "
+                f"rng.device={rng.device}, state.device={state.device}."
+            )
+
+        batch_size = state.batch_size
+        num_components = len(self.component_keys)
+        if self.num_enabled == 1:
+            indices = torch.randint(
+                0,
+                num_components,
+                (batch_size,),
+                generator=rng,
+                device=state.device,
+            )  # [B]
+            enabled_matrix = torch.zeros(
+                (batch_size, num_components),
+                device=state.device,
+                dtype=torch.bool,
+            )  # [B, N]
+            enabled_matrix.scatter_(
+                1,
+                indices[:, None],
+                torch.ones((batch_size, 1), device=state.device, dtype=torch.bool),
+            )
+
+            state.y["component_id"] = indices.to(torch.int64)  # [B]
+            label_names = state.meta.setdefault("label_names", {})
+            if "component_id" in label_names and label_names["component_id"] != self.component_keys:
+                raise ValueError(
+                    "EnableComponentsNode found existing label_names['component_id'] "
+                    "with different classes."
+                )
+            label_names["component_id"] = list(self.component_keys)
+        else:
+            scores = torch.rand(
+                (batch_size, num_components),
+                generator=rng,
+                device=state.device,
+                dtype=torch.float32,
+            )  # [B, N]
+            topk = scores.topk(k=self.num_enabled, dim=1).indices  # [B, K]
+            enabled_matrix = torch.zeros(
+                (batch_size, num_components),
+                device=state.device,
+                dtype=torch.bool,
+            )  # [B, N]
+            enabled_matrix.scatter_(1, topk, torch.ones_like(topk, dtype=torch.bool))
+
+        state.y["component_count"] = torch.full(
+            (batch_size,),
+            fill_value=self.num_enabled,
+            device=state.device,
+            dtype=torch.int64,
+        )  # [B]
+
+        enabled = state.meta.get("enabled")
+        if enabled is None:
+            enabled = {}
+            state.meta["enabled"] = enabled
+        if not isinstance(enabled, dict):
+            raise ValueError(
+                "EnableComponentsNode requires state.meta['enabled'] to be a dict. "
+                f"Got {type(enabled).__name__}."
+            )
+        for idx, key in enumerate(self.component_keys):
+            if key in enabled:
+                raise ValueError(
+                    f"EnableComponentsNode attempted to overwrite enabled['{key}']."
+                )
+            enabled[key] = enabled_matrix[:, idx]  # [B]
+
+        return state
+
+
 class SingleEventNode(ProcessNode):
     """Generate one event per sample."""
 
@@ -106,6 +218,7 @@ class SingleEventNode(ProcessNode):
         time_max: int,
         amplitude: SamplerLike[float],
         amplitude_param: str,
+        extra_params: dict[str, SamplerLike[float]] | None = None,
         out_key: str,
     ) -> None:
         """Initialize a single-event generator."""
@@ -128,6 +241,21 @@ class SingleEventNode(ProcessNode):
         self.time_max = time_max
         self.amplitude_sampler = sampler_from_value(amplitude, name="amplitude")
         self.amplitude_index = schema.param_id(amplitude_param)
+        if extra_params is not None:
+            if amplitude_param in extra_params:
+                raise ValueError("extra_params must not override amplitude_param.")
+            if any(not name for name in extra_params):
+                raise ValueError("extra_params keys must be non-empty.")
+            self.extra_param_samplers = {
+                name: sampler_from_value(value, name=name) for name, value in extra_params.items()
+            }
+            for name in self.extra_param_samplers:
+                if name not in schema.param_names:
+                    raise ValueError(
+                        f"extra_params includes '{name}' which is not in schema.param_names={schema.param_names}."
+                    )
+        else:
+            self.extra_param_samplers = {}
         self.out_key = out_key
 
     def forward(self, state: ProcessState, *, rng: torch.Generator) -> ProcessState:
@@ -170,6 +298,17 @@ class SingleEventNode(ProcessNode):
         )  # [B]
         amplitude = amplitude_base[:, None]  # [B, 1]
         params[:, :, self.amplitude_index] = amplitude
+        for name, sampler in self.extra_param_samplers.items():
+            index = self.schema.param_id(name)
+            values = sampler_sample(
+                sampler=sampler,
+                shape=(state.batch_size,),
+                rng=rng,
+                device=state.device,
+                dtype=torch.float32,
+                name=name,
+            )  # [B]
+            params[:, :, index] = values[:, None]
 
         mask = torch.ones(
             (state.batch_size, 1),
@@ -186,6 +325,81 @@ class SingleEventNode(ProcessNode):
             meta={"seq_len": self.seq_len},
         )
         state.data[self.out_key] = events
+
+        samples_base = f"{SAMPLES_PREFIX}/SingleEventNode:{self.out_key}"
+        state.data[f"{samples_base}/time_idx"] = times_idx[:, 0]  # [B]
+        state.data[f"{samples_base}/amplitude"] = amplitude_base  # [B]
+        for name, sampler in self.extra_param_samplers.items():
+            index = self.schema.param_id(name)
+            state.data[f"{samples_base}/{name}"] = params[:, 0, index]  # [B]
+        return state
+
+
+class GateEventsByEnabledNode(ProcessNode):
+    """Gate event streams using a per-sample enabled mask from process meta."""
+
+    def __init__(self, *, in_key: str, enabled_key: str, out_key: str) -> None:
+        """Initialize a gate op.
+
+        Args:
+            in_key: Key in state.data containing an EventBatch.
+            enabled_key: Key in state.meta["enabled"] containing bool[B].
+            out_key: Key to write the gated EventBatch to.
+        """
+        super().__init__()
+        if not in_key or not enabled_key or not out_key:
+            raise ValueError("in_key, enabled_key, and out_key must be non-empty.")
+        self.in_key = in_key
+        self.enabled_key = enabled_key
+        self.out_key = out_key
+
+    def forward(self, state: ProcessState, *, rng: torch.Generator) -> ProcessState:
+        """Apply per-sample gating to an EventBatch mask."""
+        self._record_seed(state, rng)
+        events = state.data.get(self.in_key)
+        if not isinstance(events, EventBatch):
+            raise TypeError(
+                f"GateEventsByEnabledNode expects EventBatch at '{self.in_key}', "
+                f"got {type(events).__name__}."
+            )
+
+        enabled = state.meta.get("enabled")
+        if not isinstance(enabled, dict):
+            raise ValueError(
+                "GateEventsByEnabledNode requires state.meta['enabled'] to be a dict. "
+                f"Got {type(enabled).__name__}."
+            )
+        enabled_mask = enabled.get(self.enabled_key)
+        if not isinstance(enabled_mask, torch.Tensor):
+            raise ValueError(
+                "GateEventsByEnabledNode enabled mask must be a torch.Tensor. "
+                f"Got {type(enabled_mask).__name__}."
+            )
+        if enabled_mask.dtype != torch.bool:
+            raise ValueError(
+                f"GateEventsByEnabledNode enabled mask must be bool, got {enabled_mask.dtype}."
+            )
+        if enabled_mask.shape != (state.batch_size,):
+            raise ValueError(
+                "GateEventsByEnabledNode enabled mask must have shape [B]. "
+                f"Got {enabled_mask.shape}, batch_size={state.batch_size}."
+            )
+        if enabled_mask.device != events.mask.device:
+            raise ValueError(
+                "GateEventsByEnabledNode enabled mask device mismatch. "
+                f"mask.device={enabled_mask.device}, events.device={events.mask.device}."
+            )
+
+        gate = enabled_mask[:, None].expand(-1, events.mask.shape[1])  # [B, E]
+        mask = events.mask & gate  # [B, E]
+        state.data[self.out_key] = EventBatch(
+            times=events.times,
+            type_ids=events.type_ids,
+            params=events.params,
+            mask=mask,
+            schema=events.schema,
+            meta=events.meta,
+        )
         return state
 
 

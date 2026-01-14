@@ -7,7 +7,7 @@ from torch import nn
 
 from toyts import (
     ECGLeadsView,
-    NoiseView,
+    GaussianNoiseView,
     PulseTrainProcess,
     SamplingAggregationView,
     SynthPipeline,
@@ -81,7 +81,7 @@ def _build_pipeline(
     views = {
         "trend": nn.Sequential(
             UnitsAbsoluteView(),
-            NoiseView(noise_std=0.05),
+            GaussianNoiseView(noise_std=0.05),
             SamplingAggregationView(mode="mean", window=5),
         )
     }

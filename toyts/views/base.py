@@ -5,6 +5,7 @@ from typing import Any
 import torch
 from torch import nn
 
+from ..core.rng import rng_make_generator, rng_split
 from ..core.types import LatentState, Observation
 from ..core.utils import utils_extract_process_meta
 
@@ -71,6 +72,14 @@ class ViewChain(View):
             The final `Observation` after applying all views in sequence, with
             per-view metadata stored in `meta["views"]`.
         """
+        device = input_state.x.device if isinstance(input_state, Observation) else input_state.centers.device
+        generator, _, _ = rng_make_generator(rng=rng, device=device)
+        child_generators = rng_split(
+            rng=generator,
+            num_children=len(self.views),
+            device=device,
+        )
+
         output: LatentState | Observation = input_state
         views_trace: list[dict[str, Any]] = []
         if isinstance(input_state, Observation):
@@ -88,8 +97,8 @@ class ViewChain(View):
                             f"Got {type(entry).__name__}."
                         )
                 views_trace = list(existing_views)
-        for view in self.views:
-            output = view(output, rng=rng)
+        for view, child_rng in zip(self.views, child_generators, strict=True):
+            output = view(output, rng=child_rng)
             if not isinstance(output, Observation):
                 raise TypeError("ViewChain must end with an Observation.")
             process_meta = utils_extract_process_meta(output.meta)

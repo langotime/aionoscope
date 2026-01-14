@@ -10,8 +10,8 @@ from toyts import (
     BaselineWanderView,
     ECGLeadsView,
     EventImpulseView,
+    GaussianNoiseView,
     KernelConvView,
-    NoiseView,
     NormalizeView,
     PulseTrainProcess,
     SynthPipeline,
@@ -79,7 +79,7 @@ def main() -> None:
             *event_head(),
             ECGLeadsView(A0=A0, jitter_std=0.03, max_delay=3),
             BaselineWanderView(amplitude_std=0.2, freq_min=0.1, freq_max=0.5),
-            NoiseView(noise_std=0.15),
+            GaussianNoiseView(noise_std=0.15),
             NormalizeView(),
         ),
     }

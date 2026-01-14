@@ -5,45 +5,9 @@ import torch
 from ..core.samplers import ConstantSampler, SamplerLike, sampler_from_value, sampler_sample
 from ..core.rng import rng_make_generator
 from ..core.types import LatentState, Observation
-from ..core.utils import utils_extract_process_meta, utils_sum_latent
+from ..core.utils import utils_extract_process_meta
 from .base import View
-
-
-def _extract_signal(
-    input_state: LatentState | Observation,
-    name: str,
-) -> tuple[torch.Tensor, dict[str, torch.Tensor], dict]:
-    """Extract a single-channel signal and metadata from a LatentState or Observation.
-
-    - If the input is a `LatentState`, it sums the latent components to produce
-      a single-channel signal.
-    - If the input is an `Observation`, it passes the signal through directly.
-
-    This helper is used by views that can operate on either latent or observed
-    signals but produce a single, interpretable output channel.
-
-    Args:
-        input_state: The input `LatentState` or `Observation`.
-        name: The name of the calling view, for error messages.
-
-    Returns:
-        A tuple containing:
-        - `signal`: The extracted signal `[B, C, L]`. If from a `LatentState`,
-          `C` will be 1.
-        - `labels`: The labels from the input state.
-        - `process_meta`: The metadata dictionary from the original process.
-    """
-    if isinstance(input_state, LatentState):
-        if input_state.latent is None:
-            raise ValueError(f"{name} requires LatentState.latent to be present.")
-        signal = utils_sum_latent(input_state.latent)  # [B, 1, L]
-        return signal, input_state.y, input_state.meta
-    if isinstance(input_state, Observation):
-        process_meta = utils_extract_process_meta(input_state.meta)
-        return input_state.x, input_state.y, process_meta
-    raise TypeError(
-        f"{name} expects LatentState or Observation, got {type(input_state).__name__}."
-    )
+from ._signal import views_extract_signal
 
 
 class UnitsAbsoluteView(View):
@@ -71,10 +35,7 @@ class UnitsAbsoluteView(View):
             An `Observation` with the signal in absolute units. `x` has shape
             `[B, C, L]`.
         """
-        signal, labels, process_meta = _extract_signal(
-            input_state,
-            name="UnitsAbsoluteView",
-        )
+        signal, labels, process_meta = views_extract_signal(input_state, name="UnitsAbsoluteView")
         observed_signal = signal  # [B, C, L]
 
         meta = {
@@ -146,9 +107,8 @@ class UnitsPercentOfCapacityView(View):
             An `Observation` where `x` is the signal scaled to a percentage,
             with shape `[B, C, L]`.
         """
-        signal, labels, process_meta = _extract_signal(
-            input_state,
-            name="UnitsPercentOfCapacityView",
+        signal, labels, process_meta = views_extract_signal(
+            input_state, name="UnitsPercentOfCapacityView"
         )
         device = signal.device
 

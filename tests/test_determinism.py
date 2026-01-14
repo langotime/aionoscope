@@ -5,8 +5,8 @@ import torch
 from toyts import (
     ECGLeadsView,
     EventImpulseView,
+    GaussianNoiseView,
     KernelConvView,
-    NoiseView,
     PulseTrainProcess,
     SynthPipeline,
     ViewChain,
@@ -62,7 +62,7 @@ def test_determinism_pulse_train() -> None:
             ),
             KernelConvView(kernels=kernels, padding=padding),
             ECGLeadsView(A0=A0, jitter_std=0.01, max_delay=2),
-            NoiseView(noise_std=0.1),
+            GaussianNoiseView(noise_std=0.1),
         ),
     }
 

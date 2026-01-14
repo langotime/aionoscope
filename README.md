@@ -28,7 +28,17 @@ The library is built around a unidirectional flow:
 *   **GPU-First**: All generation happens in PyTorch tensors. No Python loops over batch dimensions.
 *   **SSL-Ready**: Trivial generation of multi-view batches (e.g., `{"clean": ..., "noisy": ...}`) sharing the same latent state.
 *   **Anti-Shortcut**: Nuisance factors (noise, amplitude) are handled by Views, while labels are derived from the Process, preventing trivial shortcuts.
+*   **Per-sample component mixing**: Processes can write `LatentState.meta["enabled"][key]` masks (`bool[B]`) and component Views can gate themselves with `enabled_key=...`, so a single static `ViewChain` can produce 1/2/3/... component mixtures without branching pipelines.
+*   **Multi-event rendering**: `EventRenderView` materializes simple event types by summing over events, so mixtures like “spike + gaussian bump + trend” remain straightforward and reproducible.
 *   **Modular**: Components are composable `nn.Module`s.
+
+## Why These Features Exist
+
+*   **Static pipelines**: `nn.Sequential` / `ViewChain` are fixed graphs, but research often needs per-sample “recipes” (some samples have 1 component, others have 2–3). `enabled_key` makes that possible without branching the pipeline.
+*   **Stable randomness**: When `enabled_key` varies across samples, `ViewChain` splits the RNG per view so turning one component on/off does not change randomness in later components.
+*   **Composable event mixtures**: Processes already merge multiple event streams; `EventRenderView` exists so those merged streams can be rendered additively (multiple events per sample) without writing a custom renderer.
+
+See `examples/06_basic_components.py` for a minimal dataset that samples 1 (or k) enabled components per sample.
 
 ## Installation
 
@@ -107,7 +117,7 @@ from toyts.core import SynthPipeline
 from toyts.core.utils import utils_make_canonical_A0
 from toyts.kernels import make_pqrst_kernel_bank, pqrst_kernel_size
 from toyts.processes import PulseTrainProcess
-from toyts.views import ECGLeadsView, EventImpulseView, KernelConvView, NoiseView
+from toyts.views import ECGLeadsView, EventImpulseView, KernelConvView, GaussianNoiseView
 
 # 1. Define the Process (Latent Dynamics)
 # Generates an event stream with rhythm and shape labels
@@ -146,7 +156,7 @@ views = {
         EventImpulseView(seq_len=process.seq_len, amplitude_param="amplitude", rounding="nearest"),
         KernelConvView(kernels=kernels, padding=padding),
         ECGLeadsView(A0=A0, jitter_std=0.05, max_delay=2),
-        NoiseView(noise_std=0.2)
+        GaussianNoiseView(noise_std=0.2)
     )
 }
 

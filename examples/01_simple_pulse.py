@@ -8,7 +8,7 @@ from toyts.kernels.pqrst import make_pqrst_kernel_bank, pqrst_kernel_size
 from toyts.processes.pulse_train import PulseTrainProcess
 from toyts.views.ecg_leads import ECGLeadsView
 from toyts.views.events import EventImpulseView, KernelConvView
-from toyts.views.noise import BaselineWanderView, NoiseView
+from toyts.views.noise import BaselineWanderView, GaussianNoiseView
 from toyts.views.units import NormalizeView
 from toyts.views.sampling import SamplingAggregationView
 
@@ -62,13 +62,13 @@ def main() -> None:
             "noisy": torch.nn.Sequential(
                 *event_head(),
                 ECGLeadsView(A0=A0, jitter_std=0.05, max_delay=3),
-                NoiseView(noise_std=0.1),
+                GaussianNoiseView(noise_std=0.1),
                 BaselineWanderView(amplitude_std=0.3, freq_min=0.05, freq_max=0.2),
             ),
             "normalized_and_resampled": torch.nn.Sequential(
                 *event_head(),
                 ECGLeadsView(A0=A0, jitter_std=0.05, max_delay=3),
-                NoiseView(noise_std=0.1),
+                GaussianNoiseView(noise_std=0.1),
                 BaselineWanderView(amplitude_std=0.3, freq_min=0.05, freq_max=0.2),
                 NormalizeView(),
                 SamplingAggregationView(mode="mean", window=4),

@@ -9,7 +9,7 @@ from torch import nn
 from toyts import (
     ClippingView,
     MissingnessView,
-    NoiseView,
+    GaussianNoiseView,
     SamplingAggregationView,
     SynthPipeline,
     TrendSeasonAnomalyProcess,
@@ -31,14 +31,14 @@ def main() -> None:
     views = {
         "abs": nn.Sequential(
             UnitsAbsoluteView(),
-            NoiseView(noise_std=0.05),
+            GaussianNoiseView(noise_std=0.05),
             MissingnessView(dropout_prob=0.02, gap_prob=0.1, gap_length=12, hold_prob=0.05),
             SamplingAggregationView(mode="mean", window=5),
         ),
         "pct": nn.Sequential(
             UnitsPercentOfCapacityView(capacity_min=50.0, capacity_max=200.0),
             ClippingView(min_value=0.0, max_value=100.0),
-            NoiseView(noise_std=0.03),
+            GaussianNoiseView(noise_std=0.03),
         ),
     }
 
