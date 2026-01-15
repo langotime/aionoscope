@@ -31,6 +31,7 @@ from .core.samplers import (  # noqa: E402
     Sampler,
     SamplerLike,
     UniformSampler,
+    WeightedPermutationSampler,
 )
 from .core.types import LatentState, Observation  # noqa: E402
 from .kernels.pqrst import make_pqrst_kernel_bank, pqrst_kernel_size  # noqa: E402
@@ -174,6 +175,7 @@ __all__ = [
     "UniformSampler",
     "View",
     "ViewChain",
+    "WeightedPermutationSampler",
     "make_pqrst_kernel_bank",
     "curriculum_sample_stage_id",
     "curriculum_stage_histogram",
