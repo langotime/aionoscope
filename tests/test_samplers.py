@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 import torch
 
 from toyts import (
@@ -11,6 +12,7 @@ from toyts import (
     NormalSampler,
     RandIntSampler,
     UniformSampler,
+    WeightedPermutationSampler,
 )
 
 
@@ -115,3 +117,58 @@ def test_sampler_determinism_and_shapes() -> None:
     assert const.shape == shape
     assert const.dtype == torch.float32
     assert torch.all(const == 3.0)
+
+
+def test_categorical_sampler_rejects_non_finite_probs() -> None:
+    with pytest.raises(ValueError, match="finite probs"):
+        CategoricalSampler([float("nan"), 1.0])
+    with pytest.raises(ValueError, match="finite probs"):
+        CategoricalSampler([float("inf"), 1.0])
+
+
+def test_weighted_permutation_sampler_is_deterministic_and_is_a_permutation() -> None:
+    sampler = WeightedPermutationSampler(probs=[1.0, 2.0, 0.5, 3.0])
+    batch_size = 8
+    num_classes = 4
+
+    order1 = _sample_with_seed(
+        sampler,
+        shape=(batch_size, num_classes),
+        dtype=torch.int64,
+        seed=123,
+    )
+    order2 = _sample_with_seed(
+        sampler,
+        shape=(batch_size, num_classes),
+        dtype=torch.int64,
+        seed=123,
+    )
+    torch.testing.assert_close(order1, order2)
+
+    expected = torch.arange(num_classes, dtype=torch.int64)[None, :].expand(batch_size, -1)  # [B, N]
+    sorted_order = order1.sort(dim=1).values  # [B, N]
+    torch.testing.assert_close(sorted_order, expected)
+
+
+def test_weighted_permutation_sampler_places_zero_prob_last() -> None:
+    sampler = WeightedPermutationSampler(probs=[1.0, 0.0, 2.0])
+    order = _sample_with_seed(
+        sampler,
+        shape=(64, 3),
+        dtype=torch.int64,
+        seed=7,
+    )
+    assert torch.all(order[:, -1] == 1)
+
+
+def test_weighted_permutation_sampler_validates_probs() -> None:
+    with pytest.raises(ValueError, match="non-empty probs"):
+        WeightedPermutationSampler(probs=[])
+    with pytest.raises(ValueError, match="finite probs"):
+        WeightedPermutationSampler(probs=[float("nan"), 1.0])
+    with pytest.raises(ValueError, match="finite probs"):
+        WeightedPermutationSampler(probs=[float("inf"), 1.0])
+    with pytest.raises(ValueError, match="non-negative probs"):
+        WeightedPermutationSampler(probs=[1.0, -1.0])
+    with pytest.raises(ValueError, match="sum > 0"):
+        WeightedPermutationSampler(probs=[0.0, 0.0])

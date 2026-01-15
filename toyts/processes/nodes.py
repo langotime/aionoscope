@@ -3,7 +3,14 @@ from __future__ import annotations
 import torch
 
 from ..core.events import EventBatch, EventSchema
-from ..core.samplers import ConstantSampler, SamplerLike, sampler_from_value, sampler_sample
+from ..core.samplers import (
+    ConstantSampler,
+    Sampler,
+    SamplerLike,
+    WeightedPermutationSampler,
+    sampler_from_value,
+    sampler_sample,
+)
 from ..core.utils import SAMPLES_PREFIX
 from .graph import ProcessNode, ProcessState
 
@@ -99,14 +106,32 @@ class EnableComponentsNode(ProcessNode):
     Writes `state.meta["enabled"][key] = bool[B]` for each component key. When
     all samples have `num_enabled == 1`, also writes `state.y["component_id"] = int64[B]`
     with label names in `state.meta["label_names"]["component_id"]`.
+
+    For imbalanced class sampling, provide `component_id` (a Sampler over class
+    indices) together with `num_enabled=1`.
+
+    For imbalanced k-hot mixtures, provide `component_order` (a Sampler producing
+    permutations `[B, N]` of component indices), and this node enables the first
+    `k` entries per sample.
     """
 
-    def __init__(self, *, component_keys: list[str], num_enabled: SamplerLike[int]) -> None:
+    def __init__(
+        self,
+        *,
+        component_keys: list[str],
+        num_enabled: SamplerLike[int],
+        component_id: SamplerLike[int] | None = None,
+        component_order: SamplerLike[int] | None = None,
+    ) -> None:
         """Initialize enabled-mask sampling.
 
         Args:
             component_keys: Unique component identifiers.
             num_enabled: Sampler for the number of enabled components per sample (k-hot size).
+            component_id: Optional Sampler for component class indices. Only supported when
+                num_enabled is a constant 1.
+            component_order: Optional Sampler for component index permutations (int64 [B, N]).
+                When provided, components are selected by taking the first `k` indices per sample.
         """
         super().__init__()
         if not component_keys:
@@ -132,6 +157,42 @@ class EnableComponentsNode(ProcessNode):
                     "num_enabled must be <= len(component_keys). "
                     f"Got num_enabled={value}, len(component_keys)={len(component_keys)}."
                 )
+
+        if component_id is not None and component_order is not None:
+            raise ValueError("EnableComponentsNode does not allow both component_id and component_order.")
+
+        self.component_id_sampler: Sampler | None
+        if component_id is None:
+            self.component_id_sampler = None
+        else:
+            if (
+                not isinstance(self.num_enabled_sampler, ConstantSampler)
+                or self.num_enabled_sampler.value != 1
+            ):
+                raise ValueError(
+                    "EnableComponentsNode component_id is only supported when num_enabled is a "
+                    "constant 1."
+                )
+            component_id_sampler = sampler_from_value(component_id, name="component_id")
+            if isinstance(component_id_sampler, ConstantSampler):
+                value = component_id_sampler.value
+                if isinstance(value, bool) or not isinstance(value, int):
+                    raise ValueError(
+                        "EnableComponentsNode component_id must be an integer. "
+                        f"Got constant {value!r} ({type(value).__name__})."
+                    )
+                if value < 0 or value >= len(component_keys):
+                    raise ValueError(
+                        "EnableComponentsNode component_id must be in "
+                        f"[0, {len(component_keys)}). Got {value}."
+                    )
+            self.component_id_sampler = component_id_sampler
+
+        self.component_order_sampler: Sampler | None
+        if component_order is None:
+            self.component_order_sampler = None
+        else:
+            self.component_order_sampler = sampler_from_value(component_order, name="component_order")
 
     def forward(self, state: ProcessState, *, rng: torch.Generator) -> ProcessState:
         """Sample k-hot masks and store them in process meta."""
@@ -160,26 +221,47 @@ class EnableComponentsNode(ProcessNode):
                 f"Expected 1 <= num_enabled <= {num_components}. Got min={k_min}, max={k_max}."
             )
 
-        scores = torch.rand(
-            (batch_size, num_components),
-            generator=rng,
-            device=state.device,
-            dtype=torch.float32,
-        )  # [B, N]
-        order = scores.argsort(dim=1, descending=True)  # [B, N]
-        rank = torch.arange(num_components, device=state.device, dtype=torch.int64)[None, :]  # [1, N]
-        keep = rank < k[:, None]  # [B, N]
+        if self.component_id_sampler is not None:
+            if not torch.all(k == 1):
+                raise ValueError(
+                    "EnableComponentsNode component_id is only supported when all samples have "
+                    "num_enabled == 1."
+                )
+            component_id = sampler_sample(
+                sampler=self.component_id_sampler,
+                shape=(batch_size,),
+                rng=rng,
+                device=state.device,
+                dtype=torch.int64,
+                name="component_id",
+            )  # [B]
+            if not torch.all((component_id >= 0) & (component_id < num_components)):
+                id_min = int(component_id.min().item())
+                id_max = int(component_id.max().item())
+                raise ValueError(
+                    "EnableComponentsNode sampled component_id out of range. "
+                    f"Expected 0 <= component_id < {num_components}. Got min={id_min}, max={id_max}."
+                )
 
-        enabled_matrix = torch.zeros(
-            (batch_size, num_components),
-            device=state.device,
-            dtype=torch.bool,
-        )  # [B, N]
-        enabled_matrix.scatter_(1, order, keep)
+            enabled_matrix = torch.zeros(
+                (batch_size, num_components),
+                device=state.device,
+                dtype=torch.bool,
+            )  # [B, N]
+            scatter_value = torch.ones(
+                (batch_size, 1),
+                device=state.device,
+                dtype=torch.bool,
+            )  # [B, 1]
+            enabled_matrix.scatter_(
+                1,
+                component_id[:, None],
+                scatter_value,
+            )
 
-        state.y["component_count"] = k  # [B]
-        if torch.all(k == 1):
-            state.y["component_id"] = order[:, 0].to(torch.int64)  # [B]
+            state.y["component_count"] = k  # [B]
+            state.y["component_id"] = component_id.to(torch.int64)  # [B]
+
             label_names = state.meta.setdefault("label_names", {})
             if "component_id" in label_names and label_names["component_id"] != self.component_keys:
                 raise ValueError(
@@ -187,6 +269,87 @@ class EnableComponentsNode(ProcessNode):
                     "with different classes."
                 )
             label_names["component_id"] = list(self.component_keys)
+
+            enabled_spec = state.meta.setdefault("enabled_spec", {})
+            component_id_spec = self.component_id_sampler.spec()
+            if "component_id" in enabled_spec and enabled_spec["component_id"] != component_id_spec:
+                raise ValueError(
+                    "EnableComponentsNode found existing enabled_spec['component_id'] "
+                    "with different spec."
+                )
+            enabled_spec["component_id"] = component_id_spec
+        else:
+            if isinstance(self.component_order_sampler, WeightedPermutationSampler):
+                positive = sum(prob > 0 for prob in self.component_order_sampler.probs)
+                k_max = int(k.max().item())
+                if k_max > positive:
+                    raise ValueError(
+                        "EnableComponentsNode num_enabled cannot exceed the number of positive-prob "
+                        "components when using WeightedPermutationSampler. "
+                        f"Got max(num_enabled)={k_max}, num_positive_probs={positive}."
+                    )
+
+            if self.component_order_sampler is not None:
+                order = sampler_sample(
+                    sampler=self.component_order_sampler,
+                    shape=(batch_size, num_components),
+                    rng=rng,
+                    device=state.device,
+                    dtype=torch.int64,
+                    name="component_order",
+                )  # [B, N]
+                if not torch.all((order >= 0) & (order < num_components)):
+                    order_min = int(order.min().item())
+                    order_max = int(order.max().item())
+                    raise ValueError(
+                        "EnableComponentsNode sampled component_order out of range. "
+                        f"Expected 0 <= component_order < {num_components}. "
+                        f"Got min={order_min}, max={order_max}."
+                    )
+                expected = torch.arange(num_components, device=state.device, dtype=torch.int64)  # [N]
+                sorted_order = order.sort(dim=1).values  # [B, N]
+                if not torch.all(sorted_order == expected):
+                    raise ValueError(
+                        "EnableComponentsNode component_order must be a per-sample permutation of "
+                        f"[0, {num_components})."
+                    )
+
+                enabled_spec = state.meta.setdefault("enabled_spec", {})
+                order_spec = self.component_order_sampler.spec()
+                if "component_order" in enabled_spec and enabled_spec["component_order"] != order_spec:
+                    raise ValueError(
+                        "EnableComponentsNode found existing enabled_spec['component_order'] "
+                        "with different spec."
+                    )
+                enabled_spec["component_order"] = order_spec
+            else:
+                scores = torch.rand(
+                    (batch_size, num_components),
+                    generator=rng,
+                    device=state.device,
+                    dtype=torch.float32,
+                )  # [B, N]
+                order = scores.argsort(dim=1, descending=True)  # [B, N]
+            rank = torch.arange(num_components, device=state.device, dtype=torch.int64)[None, :]  # [1, N]
+            keep = rank < k[:, None]  # [B, N]
+
+            enabled_matrix = torch.zeros(
+                (batch_size, num_components),
+                device=state.device,
+                dtype=torch.bool,
+            )  # [B, N]
+            enabled_matrix.scatter_(1, order, keep)
+
+            state.y["component_count"] = k  # [B]
+            if torch.all(k == 1):
+                state.y["component_id"] = order[:, 0].to(torch.int64)  # [B]
+                label_names = state.meta.setdefault("label_names", {})
+                if "component_id" in label_names and label_names["component_id"] != self.component_keys:
+                    raise ValueError(
+                        "EnableComponentsNode found existing label_names['component_id'] "
+                        "with different classes."
+                    )
+                label_names["component_id"] = list(self.component_keys)
 
         enabled = state.meta.get("enabled")
         if enabled is None:

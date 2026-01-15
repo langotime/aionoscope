@@ -308,6 +308,8 @@ class CategoricalSampler(Sampler):
     def __post_init__(self) -> None:
         if not self.probs:
             raise ValueError("CategoricalSampler requires non-empty probs.")
+        if any(not math.isfinite(float(prob)) for prob in self.probs):
+            raise ValueError("CategoricalSampler requires finite probs.")
         if any(prob < 0 for prob in self.probs):
             raise ValueError("CategoricalSampler requires non-negative probs.")
         if sum(self.probs) <= 0:
@@ -336,6 +338,70 @@ class CategoricalSampler(Sampler):
 
     def spec(self) -> dict[str, Any]:
         return {"kind": "categorical", "probs": list(self.probs)}
+
+
+@dataclass(frozen=True)
+class WeightedPermutationSampler(Sampler):
+    """Sample weighted random permutations over classes.
+
+    This sampler returns, for each row, a permutation of `[0..N-1]` where earlier
+    ranks are more likely for classes with larger probability.
+
+    Implementation uses a Gumbel / Plackett–Luce style construction:
+    `scores = log(probs) + gumbel_noise`, then `argsort(scores, desc=True)`.
+    """
+
+    probs: Sequence[float]
+
+    def __post_init__(self) -> None:
+        if not self.probs:
+            raise ValueError("WeightedPermutationSampler requires non-empty probs.")
+        if any(not math.isfinite(float(prob)) for prob in self.probs):
+            raise ValueError("WeightedPermutationSampler requires finite probs.")
+        if any(prob < 0 for prob in self.probs):
+            raise ValueError("WeightedPermutationSampler requires non-negative probs.")
+        if sum(self.probs) <= 0:
+            raise ValueError("WeightedPermutationSampler requires probs sum > 0.")
+
+    def sample(
+        self,
+        *,
+        shape: tuple[int, ...],
+        rng: torch.Generator,
+        device: torch.device,
+        dtype: torch.dtype,
+    ) -> torch.Tensor:
+        if dtype is not torch.int64:
+            raise ValueError("WeightedPermutationSampler requires dtype=torch.int64.")
+        if len(shape) != 2:
+            raise ValueError(
+                "WeightedPermutationSampler requires shape [B, N]. "
+                f"Got shape={shape}."
+            )
+
+        batch_size, num_classes = shape
+        if num_classes != len(self.probs):
+            raise ValueError(
+                "WeightedPermutationSampler requires shape[1] to match len(probs). "
+                f"Got shape[1]={num_classes}, len(probs)={len(self.probs)}."
+            )
+
+        probs = torch.tensor(self.probs, device=device, dtype=torch.float32)  # [N]
+        log_probs = torch.log(probs)  # [N]
+
+        u = torch.rand(
+            (batch_size, num_classes),
+            generator=rng,
+            device=device,
+            dtype=torch.float32,
+        )  # [B, N]
+        gumbel = -torch.log(-torch.log(u))  # [B, N]
+        scores = log_probs[None, :] + gumbel  # [B, N]
+        order = scores.argsort(dim=1, descending=True)  # [B, N]
+        return order.to(torch.int64)
+
+    def spec(self) -> dict[str, Any]:
+        return {"kind": "weighted_permutation", "probs": list(self.probs)}
 
 
 @dataclass(frozen=True)

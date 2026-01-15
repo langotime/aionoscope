@@ -70,6 +70,35 @@ The library is built around a unidirectional data flow, which can be visualized 
 
 5.  **SynthPipeline**: This module orchestrates the data generation. It takes a `Process` and a dictionary of `Views` and, when called, generates a batch of data containing all the requested views of the same underlying latent state.
 
+## Examples Guide
+
+The `examples/` directory contains minimal, runnable scripts (and matching `.ipynb` notebooks) that demonstrate common ToyTS patterns. Run examples with `uv run python -m` or `uv run python`, e.g. `uv run python examples/06_basic_components.py`.
+
+Recommended reading order:
+
+*   `examples/01_simple_pulse.py`: smallest end-to-end “process → view → batch” example.
+*   `examples/02_multiview_ssl.py`: generate multiple observation views from one latent process (SSL-style pairing).
+*   `examples/04_curriculum_learning.py`: curriculum-style progression by selecting among multiple processes.
+*   `examples/05_param_samplers.py`: how sampler objects control distributions and how sampler specs appear in `meta`.
+*   `examples/06_basic_components.py`: **balanced** per-sample component gating (`enabled` masks) with `EnableComponentsNode(num_enabled=...)`.
+
+### Component selection examples (06–08)
+
+Examples 06–08 share the same “basic components” structure (fixed `ViewChain`, per-sample `enabled` masks), but differ in **what is being sampled** and **how labels are represented**:
+
+*   `examples/06_basic_components.py` (balanced mixtures): components are selected uniformly; `num_enabled` can be 1, fixed `k`, or per-sample `k`.
+*   `examples/07_imbalanced_components.py` (imbalanced classification, `k=1`): samples a **single component** per sample using `component_id=CategoricalSampler(...)`.
+    *   Emits a standard single-label target `y["component_id"]` (`int64[B]`), suitable for cross-entropy classification.
+    *   Histograms are computed over `component_id` (class counts).
+*   `examples/08_imbalanced_mixtures.py` (imbalanced k-hot mixtures, `k>1`): samples a **weighted ordering** via `component_order=WeightedPermutationSampler(...)` and enables the first `k`.
+    *   There is no single class label when `k>1`; the “what’s present” information is the per-component enable masks (`meta["process"]["enabled"][key]`, `bool[B]`).
+    *   Histograms are computed as per-component **enable rates** (marginals), not class counts.
+
+Conceptually, `k=1` is a special case of k-hot selection, but it is useful to keep separate examples because:
+*   training targets and losses differ (single-label classification vs multi-label set prediction),
+*   the natural summary statistics differ (class histogram vs enable-rate histogram),
+*   sampler interfaces differ (`component_id` vs `component_order`).
+
 ## Sampled Parameters in Meta
 
 Process-level sampled parameters that are not already present in outputs are stored under `LatentState.meta["samples"]`. This is a nested dictionary keyed by a process/node identifier (for example, `"TrendSeasonAnomalyProcess"` or `"EventTrainNode:events"`), with tensors for each sampled parameter.
@@ -106,6 +135,35 @@ For convenient mask sampling, use `EnableComponentsNode(component_keys=[...], nu
 *   `num_enabled=SamplerLike[int]` (e.g. `RandIntSampler(1, N + 1)`) → per-sample k-hot sizes within the same batch
 
 See `examples/06_basic_components.py` for a minimal dataset using enabled masks.
+
+For **imbalanced** single-component datasets (rare components), sample `component_id` with a non-uniform sampler (requires `num_enabled=1`):
+
+```python
+from toyts import CategoricalSampler, EnableComponentsNode
+
+EnableComponentsNode(
+    component_keys=["a", "b", "rare"],
+    num_enabled=1,
+    component_id=CategoricalSampler(probs=[1.0, 1.0, 0.02]),
+)
+```
+
+See `examples/07_imbalanced_components.py` for a full working example.
+
+For **imbalanced k-hot mixtures** (`num_enabled > 1`), provide a sampler that returns a per-sample
+ordering (permutation) of component indices:
+
+```python
+from toyts import EnableComponentsNode, WeightedPermutationSampler
+
+EnableComponentsNode(
+    component_keys=["a", "b", "rare"],
+    num_enabled=2,
+    component_order=WeightedPermutationSampler(probs=[1.0, 1.0, 0.02]),
+)
+```
+
+See `examples/08_imbalanced_mixtures.py` for a full working example.
 
 ## Multi-Event Rendering (Summing Over Events)
 

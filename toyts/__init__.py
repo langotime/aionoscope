@@ -12,6 +12,7 @@ from .core.samplers import (
     Sampler,
     SamplerLike,
     UniformSampler,
+    WeightedPermutationSampler,
 )
 from .core.types import LatentState, Observation
 from .kernels.pqrst import make_pqrst_kernel_bank, pqrst_kernel_size
@@ -141,6 +142,7 @@ __all__ = [
     "UnitsAbsoluteView",
     "UnitsPercentOfCapacityView",
     "UniformSampler",
+    "WeightedPermutationSampler",
     "View",
     "ViewChain",
     "make_pqrst_kernel_bank",

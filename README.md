@@ -39,7 +39,12 @@ The library is built around a unidirectional flow:
 *   **Stable randomness**: When `enabled_key` varies across samples, `ViewChain` splits the RNG per view so turning one component on/off does not change randomness in later components.
 *   **Composable event mixtures**: Processes already merge multiple event streams; `EventRenderView` exists so those merged streams can be rendered additively (multiple events per sample) without writing a custom renderer.
 
-See `examples/06_basic_components.py` for a minimal dataset that samples 1 (or k) enabled components per sample.
+See `examples/06_basic_components.py` for balanced per-sample component selection, and
+`examples/07_imbalanced_components.py` for imbalanced (rare) component sampling via
+`CategoricalSampler` + `EnableComponentsNode(..., component_id=...)`.
+
+For imbalanced **k-hot mixtures** (`num_enabled > 1`), see `examples/08_imbalanced_mixtures.py` and
+`WeightedPermutationSampler` + `EnableComponentsNode(..., component_order=...)`.
 
 ## Installation
 
