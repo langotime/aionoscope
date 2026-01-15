@@ -374,30 +374,6 @@ class RandomWalkNoiseView(View):
         return Observation(x=observed_signal, y=labels, meta=meta)
 
 
-class BrownNoiseView(View):
-    """A view that adds Brown noise (canonical: random-walk noise)."""
-
-    def __init__(
-        self,
-        *,
-        step_std: SamplerLike[float],
-        enabled_key: str | None = None,
-    ) -> None:
-        super().__init__()
-        self._impl = RandomWalkNoiseView(step_std=step_std, enabled_key=enabled_key)
-
-    def forward(
-        self,
-        input_state: LatentState | Observation,
-        *,
-        rng: torch.Generator | None = None,
-    ) -> Observation:
-        obs = self._impl(input_state, rng=rng)
-        meta = dict(obs.meta)
-        meta["view"] = "BrownNoiseView"
-        return Observation(x=obs.x, y=obs.y, meta=meta)
-
-
 class ColoredNoiseView(View):
     """A view that adds colored noise with power spectrum ~ 1/f^alpha."""
 

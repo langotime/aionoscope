@@ -26,7 +26,6 @@ from toyts import (
 from toyts.datasets import SynthBatchIterableDataset
 from toyts.processes.constant import ConstantLatentNode
 from toyts.views.noise import (
-    BrownNoiseView,
     GaussianNoiseView,
     RandomWalkNoiseView,
     UniformNoiseView,
@@ -192,7 +191,6 @@ def main() -> None:
         "gaussian_noise",
         "uniform_noise",
         "random_walk_noise",
-        "brown_noise",
         "linear_trend",
         "quadratic_trend",
         "log_trend",
@@ -237,7 +235,6 @@ def main() -> None:
         GaussianNoiseView(noise_std=UniformSampler(0.02, 0.15), enabled_key="gaussian_noise"),
         UniformNoiseView(amplitude=UniformSampler(0.05, 0.25), enabled_key="uniform_noise"),
         RandomWalkNoiseView(step_std=UniformSampler(0.01, 0.08), enabled_key="random_walk_noise"),
-        BrownNoiseView(step_std=UniformSampler(0.01, 0.08), enabled_key="brown_noise"),
         LinearTrendView(
             seq_len=seq_len,
             slope=UniformSampler(-2.0, 2.0),

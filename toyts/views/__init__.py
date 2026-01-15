@@ -5,7 +5,6 @@ from .events_basic import EventRenderView
 from .missingness import MissingnessView
 from .noise import (
     BaselineWanderView,
-    BrownNoiseView,
     ColoredNoiseView,
     GaussianNoiseView,
     LaplaceNoiseView,
@@ -33,7 +32,6 @@ from .units import ClippingView, NormalizeView, UnitsAbsoluteView, UnitsPercentO
 
 __all__ = [
     "BaselineWanderView",
-    "BrownNoiseView",
     "ChirpView",
     "ClippingView",
     "ECGLeadsView",

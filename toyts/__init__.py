@@ -40,7 +40,6 @@ from .views.events import EventImpulseView, EventStreamView, KernelConvView
 from .views.events_basic import EventRenderView
 from .views.noise import (
     BaselineWanderView,
-    BrownNoiseView,
     ColoredNoiseView,
     GaussianNoiseView,
     LaplaceNoiseView,
@@ -71,7 +70,6 @@ from .processes.base import Process
 
 __all__ = [
     "BaselineWanderView",
-    "BrownNoiseView",
     "BernoulliSampler",
     "CategoricalSampler",
     "ChirpView",

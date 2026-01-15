@@ -87,8 +87,7 @@ Update / extend `toyts/views/noise.py` (required for “ConstantProcess + single
 - Add missing noise types as additional views in the same module (so the library has one canonical “noise” place):
   - `UniformNoiseView(amplitude: SamplerLike[float])`
   - `LaplaceNoiseView(scale: SamplerLike[float])` (heavy-tailed noise)
-  - `RandomWalkNoiseView(step_std: SamplerLike[float])`
-  - `BrownNoiseView(step_std: SamplerLike[float])` (either an alias of random-walk, or a normalized variant; pick one canonical definition and document it)
+  - `RandomWalkNoiseView(step_std: SamplerLike[float])` (Brown noise / integrated white)
   - `ColoredNoiseView(alpha: SamplerLike[float])` (FFT-based; `alpha=1` pink, `alpha=2` brown)
 - Update `BaselineWanderView` to interpret `freq_min/freq_max` as **Hz** and use `process_meta["sample_rate_hz"]` to build `t_sec` (fail-fast if missing).
 

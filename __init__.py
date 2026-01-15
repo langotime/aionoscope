@@ -67,7 +67,6 @@ from .views.events import EventImpulseView, EventStreamView, KernelConvView  # n
 from .views.events_basic import EventRenderView  # noqa: E402
 from .views.noise import (  # noqa: E402
     BaselineWanderView,
-    BrownNoiseView,
     ColoredNoiseView,
     GaussianNoiseView,
     LaplaceNoiseView,
@@ -103,7 +102,6 @@ from .processes.base import Process  # noqa: E402
 
 __all__ = [
     "BaselineWanderView",
-    "BrownNoiseView",
     "BernoulliSampler",
     "CategoricalSampler",
     "ChirpView",
