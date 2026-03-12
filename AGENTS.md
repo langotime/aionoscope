@@ -86,12 +86,27 @@ This repo contains source code of the Aionoscope library - PyTorch-native online
 - Keep minimal runnable scripts in examples/.
 - Examples should visualize results (plots or figures).
 - Notebooks should be interactive: no `main()`; walk through the Python demo step-by-step and visualize all steps.
+- After changing code, ALWAYS review whether `ARCHITECTURE.md`, `README.md`, and `DOCUMENTATION.md` must be updated, and update them in the same task when needed.
+- Treat the three top-level docs as having different roles:
+  - `ARCHITECTURE.md`: stable design choices, goals, invariants, core data model, metadata contracts, execution model, extension rules, and other durable architectural decisions.
+  - `README.md`: short human-facing onboarding, public capabilities, the main mental model, install/run basics, and pointers to the best examples. Keep it compact.
+  - `DOCUMENTATION.md`: usage details, metadata layout, advanced composition patterns, example guide, and other operational details that are too detailed for `README.md`.
+- Update `ARCHITECTURE.md` when a code change introduces or removes a durable design decision, changes the canonical data flow, changes metadata contracts, changes process/view responsibilities, or changes the public architectural story.
+- Update `README.md` when a code change affects what a new user should see first: installation, quick start, public APIs, major capabilities, recommended examples, or the top-level explanation of the library.
+- Update `DOCUMENTATION.md` when a code change affects usage details, metadata access patterns, examples, supported workflows, caveats, or other operational guidance.
+- If a code change does not require updating one of these files, explicitly verify that and mention it in the plan/review rather than silently skipping the check.
 
 ## Planning
 - Write plans to files in Markdown.
 - Put plans into the plans/ subridectory with a unique descriptive name and .md file type. Start each file name with "N_" prefix where N is a unique increasing counter.
 - Don't be afraid to change the library existing code - we must maintain the library lean and clean, with KISS and DRY API and internals, easy to maintain.
+- Every plan MUST include an explicit documentation review step for `ARCHITECTURE.md`, `README.md`, and `DOCUMENTATION.md`.
+- Every plan MUST include a `Documentation impact` section with three explicit entries:
+  - `ARCHITECTURE.md`: what stable design decisions will change, or why no change is needed.
+  - `README.md`: what onboarding/public-facing text will change, or why no change is needed.
+  - `DOCUMENTATION.md`: what usage/operational details will change, or why no change is needed.
 - Before submitting a plan for a review you MUST:
   - Study the existing code base to make sure the resulting library API and library internals are coherent, lean, clean, and logical as a whole.
   - Check if any of the code you want to add already exist in the library but is a part of a larger components - propose how to refactor the code to make it more composable.
   - Add a section to the plan, describing how does the change affect the library documentation and all changes required to the documentation to keep the library easy to use.
+  - Make updating or explicitly rejecting updates to `ARCHITECTURE.md`, `README.md`, and `DOCUMENTATION.md` a mandatory part of the implementation plan, not an optional follow-up.
