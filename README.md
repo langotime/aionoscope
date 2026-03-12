@@ -149,7 +149,7 @@ kernels = make_pqrst_kernel_bank(
 )
 padding = kernel_size // 2
 
-A0 = utils_make_canonical_A0(num_leads=12, num_latent=3)
+A0 = utils_make_canonical_A0(num_leads=12, num_latent=3).to(device)
 
 # Create two views of the same process for SSL training
 views = {
@@ -175,6 +175,61 @@ batch = pipe(batch_size=64, device=device)
 x_clean = batch["clean"].x       # [64, 12, 2048]
 x_noisy = batch["noisy"].x       # [64, 12, 2048]
 labels = batch["clean"].y        # {"rhythm": [64], "shape": [64]}
+```
+
+### PTB-XL rhythm example (ECGProcess)
+
+`ECGProcess` generates an ECG-like event stream labeled with PTB-XL rhythm codes (12 classes). It emits `LatentState.events` and a categorical label `y["rhythm"]`.
+
+```python
+import torch
+from toyts import (
+    ECGLeadsView,
+    ECGProcess,
+    ECGRhythmParams,
+    EventImpulseView,
+    KernelConvView,
+    SynthPipeline,
+    make_ecg_kernel_bank,
+    pqrst_kernel_size,
+)
+from toyts.core.utils import utils_make_canonical_A0
+from toyts.ptbxl import ptbxl_rhythm_codes
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+process = ECGProcess(
+    seq_len=2048,
+    sample_rate_hz=500.0,
+    rhythm_codes=ptbxl_rhythm_codes(),
+    rhythm_params=ECGRhythmParams.ptbxl_defaults(),
+)
+
+reference_hr_bpm = 75.0
+spacing = process.sample_rate_hz * 60.0 / reference_hr_bpm
+kernel_size = pqrst_kernel_size(spacing=spacing, support_sigma=6.0)
+kernels = make_ecg_kernel_bank(
+    spacing=spacing,
+    kernel_size=kernel_size,
+    device=device,
+)
+padding = kernel_size // 2
+
+A0 = utils_make_canonical_A0(num_leads=12, num_latent=3)
+
+views = {
+    "clean": torch.nn.Sequential(
+        EventImpulseView(seq_len=process.seq_len, amplitude_param="amplitude", rounding="nearest"),
+        KernelConvView(kernels=kernels, padding=padding),
+        ECGLeadsView(A0=A0, jitter_std=0.03, max_delay=3),
+    )
+}
+
+pipe = SynthPipeline(process, views)
+batch = pipe(batch_size=64, device=device)
+
+rhythm = batch["clean"].y["rhythm"]  # [64]
+rhythm_names = batch["clean"].meta["process"]["label_names"]["rhythm"]
 ```
 
 ## Architecture

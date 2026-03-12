@@ -16,8 +16,10 @@ from .core.samplers import (
 )
 from .core.types import LatentState, Observation
 from .kernels.pqrst import make_pqrst_kernel_bank, pqrst_kernel_size
+from .kernels.ecg import ECG_EVENT_TYPE_NAMES, make_ecg_kernel_bank
 from .processes.curriculum import CurriculumProcess
 from .processes.constant import ConstantLatentNode, ConstantProcess
+from .processes.ecg import ECGProcess, ECGRhythmParams
 from .processes.pulse_train import PulseTrainProcess
 from .processes.graph import ProcessChain, ProcessGraph, ProcessOp, ProcessState, Scope, Seq, Switch, Parallel
 from .processes.nodes import (
@@ -27,6 +29,7 @@ from .processes.nodes import (
     GateEventsByEnabledNode,
     GateEventsNode,
     MapTypeNode,
+    SampleLabelNode,
     SampleLabelsNode,
     SetLabelsNode,
     SingleEventNode,
@@ -82,8 +85,11 @@ __all__ = [
     "CurriculumProcess",
     "CurriculumSchedule",
     "DampedSineWaveView",
+    "ECGProcess",
+    "ECGRhythmParams",
     "ECGLeadsView",
     "DedupeEventsNode",
+    "ECG_EVENT_TYPE_NAMES",
     "EnableComponentsNode",
     "ExponentialTrendView",
     "EventBatch",
@@ -120,6 +126,7 @@ __all__ = [
     "SawtoothWaveView",
     "Sampler",
     "SamplerLike",
+    "SampleLabelNode",
     "SampleLabelsNode",
     "SetLabelsNode",
     "SigmoidTrendView",
@@ -143,6 +150,7 @@ __all__ = [
     "WeightedPermutationSampler",
     "View",
     "ViewChain",
+    "make_ecg_kernel_bank",
     "make_pqrst_kernel_bank",
     "curriculum_sample_stage_id",
     "curriculum_stage_histogram",

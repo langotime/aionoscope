@@ -17,6 +17,9 @@ build-backend = "setuptools.build_meta"
 where = ["."]
 include = ["toyts*"]
 
+[tool.setuptools.package-data]
+toyts = ["assets/**/*.csv"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"

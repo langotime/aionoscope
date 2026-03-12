@@ -47,6 +47,73 @@ class SampleLabelsNode(ProcessNode):
         return state
 
 
+class SampleLabelNode(ProcessNode):
+    """Sample a single categorical label into state.y.
+
+    Supports either uniform sampling over class_names or an explicit sampler over
+    class indices.
+    """
+
+    def __init__(
+        self,
+        *,
+        label_key: str,
+        class_names: list[str],
+        sampler: SamplerLike[int] | None = None,
+    ) -> None:
+        super().__init__()
+        if not label_key:
+            raise ValueError("label_key must be non-empty.")
+        if not class_names:
+            raise ValueError("class_names must be non-empty.")
+        if len(set(class_names)) != len(class_names):
+            raise ValueError("class_names must be unique.")
+
+        self.label_key = label_key
+        self.class_names = list(class_names)
+        self.sampler = None if sampler is None else sampler_from_value(sampler, name=label_key)
+
+    def forward(self, state: ProcessState, *, rng: torch.Generator) -> ProcessState:
+        self._record_seed(state, rng)
+        num_classes = len(self.class_names)
+
+        if self.sampler is None:
+            indices = torch.randint(
+                0,
+                num_classes,
+                (state.batch_size,),
+                generator=rng,
+                device=state.device,
+            )  # [B]
+        else:
+            indices = sampler_sample(
+                sampler=self.sampler,
+                shape=(state.batch_size,),
+                rng=rng,
+                device=state.device,
+                dtype=torch.int64,
+                name=self.label_key,
+            )  # [B]
+            if not torch.all((indices >= 0) & (indices < num_classes)):
+                min_value = int(indices.min().item())
+                max_value = int(indices.max().item())
+                raise ValueError(
+                    f"SampleLabelNode sampled '{self.label_key}' out of range. "
+                    f"Expected 0 <= idx < {num_classes}, got min={min_value}, max={max_value}."
+                )
+
+        state.y[self.label_key] = indices.to(torch.int64)
+
+        label_names = state.meta.setdefault("label_names", {})
+        if self.label_key in label_names and label_names[self.label_key] != self.class_names:
+            raise ValueError(
+                f"Label '{self.label_key}' already exists in meta with different classes. "
+                f"Existing={label_names[self.label_key]}, new={self.class_names}."
+            )
+        label_names[self.label_key] = self.class_names
+        return state
+
+
 class SetLabelsNode(ProcessNode):
     """Set constant categorical labels into state.y."""
 

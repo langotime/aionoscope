@@ -363,6 +363,56 @@ labels = batch["clean"].y
 print(labels)
 ```
 
+## PTB-XL Rhythm Labels (ECGProcess)
+
+ToyTS also includes `ECGProcess`, which emits ECG-like event streams labeled with PTB-XL rhythm SCP codes (12 classes). It produces `LatentState.events` and a categorical `y["rhythm"]`.
+
+```python
+import torch
+from toyts import (
+    ECGLeadsView,
+    ECGProcess,
+    ECGRhythmParams,
+    EventImpulseView,
+    KernelConvView,
+    SynthPipeline,
+    make_ecg_kernel_bank,
+    pqrst_kernel_size,
+)
+from toyts.ptbxl import ptbxl_rhythm_codes
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+rng = torch.Generator(device=device).manual_seed(1234)
+
+process = ECGProcess(
+    seq_len=2048,
+    sample_rate_hz=500.0,
+    rhythm_codes=ptbxl_rhythm_codes(),
+    rhythm_params=ECGRhythmParams.ptbxl_defaults(),
+)
+
+reference_hr_bpm = 75.0
+spacing = process.sample_rate_hz * 60.0 / reference_hr_bpm
+kernel_size = pqrst_kernel_size(spacing=spacing, support_sigma=6.0)
+kernels = make_ecg_kernel_bank(spacing=spacing, kernel_size=kernel_size, device=device)
+padding = kernel_size // 2
+
+A0 = torch.randn((12, 3), device=device)  # [C, K]
+views = {
+    "clean": torch.nn.Sequential(
+        EventImpulseView(seq_len=process.seq_len, amplitude_param="amplitude", rounding="nearest"),
+        KernelConvView(kernels=kernels, padding=padding),
+        ECGLeadsView(A0=A0, jitter_std=0.03, max_delay=3),
+    ),
+}
+
+pipeline = SynthPipeline(process=process, views=views).to(device)
+batch = pipeline(batch_size=8, device=device, rng=rng)
+
+rhythm = batch["clean"].y["rhythm"]  # [B]
+rhythm_names = batch["clean"].meta["process"]["label_names"]["rhythm"]
+```
+
 ## Creating Custom Components
 
 ### Custom Process
