@@ -8,6 +8,8 @@ The core philosophy of Aionoscope is the strict separation of the data-generatin
 
 Aionoscope is intended to support composable processes across domains. The goal is to generate everything from the simplest time series (single event, repeated events of one type) to complex combinations, so SSL models can be trained with a curriculum that starts with isolated events and gradually increases complexity.
 
+Use `README.md` for the shortest onboarding path and `ARCHITECTURE.md` for the stable design contracts. This document focuses on usage patterns, metadata layout, and runnable examples.
+
 ### Design Goals
 
 *   **Composable process graphs**: Build complex generators from reusable blocks with branching and merging.
@@ -81,6 +83,7 @@ Recommended reading order:
 *   `examples/04_curriculum_learning.py`: curriculum-style progression by selecting among multiple processes.
 *   `examples/05_param_samplers.py`: how sampler objects control distributions and how sampler specs appear in `meta`.
 *   `examples/06_basic_components.py`: **balanced** per-sample component gating (`enabled` masks) with `EnableComponentsNode(num_enabled=...)`.
+*   `examples/09_ptbxl_rhythm_12.py`, `examples/10_ptbxl_form_19.py`, `examples/11_ptbxl_diagnostic_44.py`: PTB-XL rhythm/form/diagnostic slices over the same `y["scp"]` tensor.
 
 ### Component selection examples (06–08)
 
@@ -100,6 +103,8 @@ Conceptually, `k=1` is a special case of k-hot selection, but it is useful to ke
 *   sampler interfaces differ (`component_id` vs `component_order`).
 
 ## Sampled Parameters in Meta
+
+Most stochastic arguments use `SamplerLike`, meaning either a sampler object or a fixed scalar/0-d tensor normalized to a `ConstantSampler`.
 
 Process-level sampled parameters that are not already present in outputs are stored under `LatentState.meta["samples"]`. This is a nested dictionary keyed by a process/node identifier (for example, `"TrendSeasonAnomalyProcess"` or `"EventTrainNode:events"`), with tensors for each sampled parameter.
 
@@ -185,12 +190,12 @@ Process graphs allow non-linear composition, which is hard to express as a simpl
 
 ## Installation
 
-To install the library, you can clone the repository and install it in editable mode:
+To install the library, clone the repository and sync the local environment:
 
 ```bash
 git clone <repository-url>
 cd aionoscope
-pip install -e .
+uv sync
 ```
 
 ## Simple ProcessGraph Example (Two Generators)
@@ -365,7 +370,7 @@ print(labels)
 
 ## PTB-XL SCP Labels (ECGProcess)
 
-`ECGProcess` emits ECG-like event streams labeled with the full PTB-XL SCP code set (71 labels). It produces `LatentState.events` and a multi-label `y["scp"]` (bool [B, 71]). The process meta includes `label_groups` to slice rhythm/diagnostic/form codes.
+`ECGProcess` emits ECG-like event streams labeled with the full PTB-XL SCP code set (71 labels). It produces `LatentState.events` and a multi-label `y["scp"]` (bool [B, 71]). The process meta includes `label_groups` to slice rhythm/diagnostic/form codes, so those heads stay slices over one target tensor rather than separate public label APIs.
 
 ```python
 import torch
@@ -430,11 +435,14 @@ To create a custom view, you need to inherit from `aiono.views.base.View` and im
 
 ## Library Architecture
 
+For the stable design rules, rendering paths, and metadata contracts, see `ARCHITECTURE.md`. The package layout is:
+
 *   `aiono.core`: Base types (`LatentState`, `Observation`) and pipeline logic.
 *   `aiono.processes`: Latent generators (e.g., `PulseTrainProcess`, `TrendSeasonAnomalyProcess`).
 *   `aiono.views`: Observation transforms (e.g., `ECGLeadsView`, `UnitsAbsoluteView`, `SamplingAggregationView`, `MissingnessView`).
 *   `aiono.kernels`: Signal morphology kernels used by some processes.
+*   `aiono.ptbxl`: SCP taxonomy helpers, phenotype tables, and label samplers.
 *   `aiono.datasets`: Iterable datasets for easy integration with `torch.utils.data.DataLoader`.
-*   `aiono.examples`: Example scripts to get you started.
+*   `examples/`: Top-level example scripts and notebooks.
 
 This documentation provides a starting point for using Aionoscope. For more details on specific modules and their parameters, please refer to the in-code docstrings.

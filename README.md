@@ -6,6 +6,8 @@ Aionoscope is designed to benchmark **Self-Supervised Learning (SSL)** and super
 
 Aionoscope is intended to support composable process graphs across domains. The goal is to build both very simple series (single event, repeated events of one type) and progressively richer combinations, enabling curriculum-style training where SSL models start from isolated events and scale to complex multi-component dynamics.
 
+Use `ARCHITECTURE.md` for the stable design contracts and `DOCUMENTATION.md` for usage details, metadata conventions, and the longer example guide.
+
 ## Design Goals
 
 *   **Composable process graphs**: Reusable blocks with branching/merging to build complex generators from simple parts.
@@ -46,10 +48,26 @@ See `examples/06_basic_components.py` for balanced per-sample component selectio
 For imbalanced **k-hot mixtures** (`num_enabled > 1`), see `examples/08_imbalanced_mixtures.py` and
 `WeightedPermutationSampler` + `EnableComponentsNode(..., component_order=...)`.
 
+## Public Patterns
+
+*   Parameters can be fixed scalars or `SamplerLike` objects, so the same API works for deterministic and sampled generators.
+*   Processes can stay event-first and let views render with `EventImpulseView`, `KernelConvView`, or `EventRenderView`.
+*   One static `ViewChain` can serve balanced, imbalanced, and variable-complexity mixtures through `EnableComponentsNode` and `enabled_key`.
+*   PTB-XL exposes one public target, `y["scp"]`; rhythm, diagnostic, and form tasks are slices over `label_groups`, not separate public label heads.
+
+## Example Map
+
+*   `examples/01_simple_pulse.py`: smallest end-to-end process -> view -> batch example.
+*   `examples/02_multiview_ssl.py`: generate multiple observation views from one process execution.
+*   `examples/06_basic_components.py`: balanced component mixtures with enabled masks.
+*   `examples/07_imbalanced_components.py`: imbalanced single-component datasets via `component_id`.
+*   `examples/08_imbalanced_mixtures.py`: imbalanced k-hot mixtures via `component_order`.
+*   `examples/09_ptbxl_rhythm_12.py`, `examples/10_ptbxl_form_19.py`, `examples/11_ptbxl_diagnostic_44.py`: PTB-XL rhythm/form/diagnostic slices over the same `y["scp"]` tensor.
+
 ## Installation
 
 ```bash
-pip install -e .
+uv sync
 ```
 
 ## Quick Start
@@ -179,7 +197,7 @@ labels = batch["clean"].y        # {"rhythm": [64], "shape": [64]}
 
 ### PTB-XL SCP multi-label example (ECGProcess)
 
-`ECGProcess` generates ECG-like event streams labeled with the full PTB-XL SCP code set (71 codes). It emits `LatentState.events` and a multi-label `y["scp"]` (bool [B, 71]). `label_groups` in the process meta provides rhythm/diagnostic/form slices.
+`ECGProcess` generates ECG-like event streams labeled with the full PTB-XL SCP code set (71 codes). The public target is always `y["scp"]` (bool [B, 71]), and `meta["process"]["label_groups"]` provides rhythm/diagnostic/form slices over that same tensor. PTB-XL examples use the direct 12-lead kernel renderer (`EventImpulseView -> KernelConvView`), so there is no separate rhythm-only public label API.
 
 ```python
 import torch
@@ -233,7 +251,11 @@ rhythm = scp[:, label_groups["rhythm"]]  # [64, 12]
 
 ## Architecture
 
+See `ARCHITECTURE.md` for the design model and metadata contracts, and `DOCUMENTATION.md` for the longer usage guide. At a high level:
+
 *   `aiono.core`: Base types (`LatentState`, `Observation`) and pipeline logic.
-*   `aiono.processes`: Latent generators (e.g., `PulseTrain`, `TrendSeasonAnomaly`).
-*   `aiono.views`: Observation transforms (e.g., `ECGLeads`, `Units`, `Sampling`, `Missingness`).
-*   `aiono.kernels`: Signal morphology kernels.
+*   `aiono.processes`: Latent generators (e.g., `PulseTrainProcess`, `TrendSeasonAnomalyProcess`, `ECGProcess`).
+*   `aiono.views`: Observation transforms (e.g., `ECGLeadsView`, `EventImpulseView`, `MissingnessView`).
+*   `aiono.kernels`: Signal morphology kernels and PTB-XL lead renderers.
+*   `aiono.ptbxl`: SCP taxonomy helpers, phenotype tables, and label samplers.
+*   `aiono.datasets`: Iterable dataset wrappers.
