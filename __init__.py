@@ -35,8 +35,10 @@ from .core.samplers import (  # noqa: E402
 )
 from .core.types import LatentState, Observation  # noqa: E402
 from .kernels.pqrst import make_pqrst_kernel_bank, pqrst_kernel_size  # noqa: E402
+from .kernels.ptbxl import make_ptbxl_kernel_bank, ptbxl_kernel_size  # noqa: E402
 from .processes.curriculum import CurriculumProcess  # noqa: E402
 from .processes.constant import ConstantLatentNode, ConstantProcess  # noqa: E402
+from .processes.ecg import ECGMorphologyParams, ECGProcess, ECGRhythmParams  # noqa: E402
 from .processes.pulse_train import PulseTrainProcess  # noqa: E402
 from .processes.graph import (  # noqa: E402
     Parallel,
@@ -115,6 +117,9 @@ __all__ = [
     "CurriculumProcess",
     "CurriculumSchedule",
     "DampedSineWaveView",
+    "ECGMorphologyParams",
+    "ECGProcess",
+    "ECGRhythmParams",
     "ECGLeadsView",
     "DedupeEventsNode",
     "EnableComponentsNode",
@@ -177,7 +182,9 @@ __all__ = [
     "ViewChain",
     "WeightedPermutationSampler",
     "make_pqrst_kernel_bank",
+    "make_ptbxl_kernel_bank",
     "curriculum_sample_stage_id",
     "curriculum_stage_histogram",
     "pqrst_kernel_size",
+    "ptbxl_kernel_size",
 ]

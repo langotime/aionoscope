@@ -177,59 +177,58 @@ x_noisy = batch["noisy"].x       # [64, 12, 2048]
 labels = batch["clean"].y        # {"rhythm": [64], "shape": [64]}
 ```
 
-### PTB-XL rhythm example (ECGProcess)
+### PTB-XL SCP multi-label example (ECGProcess)
 
-`ECGProcess` generates an ECG-like event stream labeled with PTB-XL rhythm codes (12 classes). It emits `LatentState.events` and a categorical label `y["rhythm"]`.
+`ECGProcess` generates ECG-like event streams labeled with the full PTB-XL SCP code set (71 codes). It emits `LatentState.events` and a multi-label `y["scp"]` (bool [B, 71]). `label_groups` in the process meta provides rhythm/diagnostic/form slices.
 
 ```python
 import torch
 from toyts import (
-    ECGLeadsView,
+    ECGMorphologyParams,
     ECGProcess,
     ECGRhythmParams,
     EventImpulseView,
     KernelConvView,
     SynthPipeline,
-    make_ecg_kernel_bank,
-    pqrst_kernel_size,
+    make_ptbxl_kernel_bank,
+    ptbxl_kernel_size,
 )
-from toyts.core.utils import utils_make_canonical_A0
-from toyts.ptbxl import ptbxl_rhythm_codes
+from toyts.ptbxl import PTBXLLabelSetSampler, ptbxl_all_codes
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+scp_codes = ptbxl_all_codes()
+sampler = PTBXLLabelSetSampler(scp_codes=scp_codes, normal_prob=0.25)
 process = ECGProcess(
     seq_len=2048,
     sample_rate_hz=500.0,
-    rhythm_codes=ptbxl_rhythm_codes(),
+    scp_codes=scp_codes,
+    scp_sampler=sampler,
     rhythm_params=ECGRhythmParams.ptbxl_defaults(),
+    morphology_params=ECGMorphologyParams.ptbxl_defaults(),
 )
 
-reference_hr_bpm = 75.0
-spacing = process.sample_rate_hz * 60.0 / reference_hr_bpm
-kernel_size = pqrst_kernel_size(spacing=spacing, support_sigma=6.0)
-kernels = make_ecg_kernel_bank(
-    spacing=spacing,
+kernel_size = ptbxl_kernel_size(sample_rate_hz=process.sample_rate_hz, support_ms=400.0)
+kernels = make_ptbxl_kernel_bank(
+    sample_rate_hz=process.sample_rate_hz,
     kernel_size=kernel_size,
     device=device,
 )
 padding = kernel_size // 2
 
-A0 = utils_make_canonical_A0(num_leads=12, num_latent=3)
-
 views = {
     "clean": torch.nn.Sequential(
         EventImpulseView(seq_len=process.seq_len, amplitude_param="amplitude", rounding="nearest"),
         KernelConvView(kernels=kernels, padding=padding),
-        ECGLeadsView(A0=A0, jitter_std=0.03, max_delay=3),
     )
 }
 
 pipe = SynthPipeline(process, views)
 batch = pipe(batch_size=64, device=device)
 
-rhythm = batch["clean"].y["rhythm"]  # [64]
-rhythm_names = batch["clean"].meta["process"]["label_names"]["rhythm"]
+scp = batch["clean"].y["scp"]  # [64, 71]
+label_groups = batch["clean"].meta["process"]["label_groups"]
+rhythm = scp[:, label_groups["rhythm"]]  # [64, 12]
 ```
 
 ## Architecture

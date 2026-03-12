@@ -114,6 +114,82 @@ class SampleLabelNode(ProcessNode):
         return state
 
 
+class SampleMultiLabelNode(ProcessNode):
+    """Sample multi-label boolean targets into state.y."""
+
+    def __init__(
+        self,
+        *,
+        label_key: str,
+        class_names: list[str],
+        sampler: Sampler,
+        label_groups: dict[str, list[int]] | None = None,
+    ) -> None:
+        super().__init__()
+        if not label_key:
+            raise ValueError("label_key must be non-empty.")
+        if not class_names:
+            raise ValueError("class_names must be non-empty.")
+        if len(set(class_names)) != len(class_names):
+            raise ValueError("class_names must be unique.")
+        if label_groups is not None:
+            if not label_groups:
+                raise ValueError("label_groups must be non-empty when provided.")
+            for name, indices in label_groups.items():
+                if not name:
+                    raise ValueError("label_groups keys must be non-empty.")
+                if not indices:
+                    raise ValueError(f"label_groups['{name}'] must be non-empty.")
+                if any(idx < 0 or idx >= len(class_names) for idx in indices):
+                    raise ValueError(
+                        f"label_groups['{name}'] contains indices outside [0, {len(class_names)})."
+                    )
+
+        self.label_key = label_key
+        self.class_names = list(class_names)
+        self.sampler = sampler
+        self.label_groups = label_groups
+
+    def forward(self, state: ProcessState, *, rng: torch.Generator) -> ProcessState:
+        self._record_seed(state, rng)
+        num_classes = len(self.class_names)
+
+        labels = sampler_sample(
+            sampler=self.sampler,
+            shape=(state.batch_size, num_classes),
+            rng=rng,
+            device=state.device,
+            dtype=torch.bool,
+            name=self.label_key,
+        )  # [B, C]
+        if labels.dtype is not torch.bool:
+            raise ValueError(
+                f"SampleMultiLabelNode expected bool labels, got {labels.dtype}."
+            )
+
+        state.y[self.label_key] = labels
+
+        label_names = state.meta.setdefault("label_names", {})
+        if self.label_key in label_names and label_names[self.label_key] != self.class_names:
+            raise ValueError(
+                f"Label '{self.label_key}' already exists in meta with different classes. "
+                f"Existing={label_names[self.label_key]}, new={self.class_names}."
+            )
+        label_names[self.label_key] = self.class_names
+
+        if self.label_groups is not None:
+            label_groups = state.meta.setdefault("label_groups", {})
+            for name, indices in self.label_groups.items():
+                if name in label_groups and label_groups[name] != indices:
+                    raise ValueError(
+                        f"Label group '{name}' already exists in meta with different indices. "
+                        f"Existing={label_groups[name]}, new={indices}."
+                    )
+                label_groups[name] = list(indices)
+
+        return state
+
+
 class SetLabelsNode(ProcessNode):
     """Set constant categorical labels into state.y."""
 

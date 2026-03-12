@@ -9,6 +9,7 @@ from .nodes import (
     GateEventsByEnabledNode,
     GateEventsNode,
     MapTypeNode,
+    SampleMultiLabelNode,
     SampleLabelNode,
     SampleLabelsNode,
     SetLabelsNode,
@@ -17,13 +18,14 @@ from .nodes import (
     TimeShiftNode,
     UnionEventsNode,
 )
-from .ecg import ECGProcess, ECGRhythmParams
+from .ecg import ECGProcess, ECGRhythmParams, ECGMorphologyParams
 from .pulse_train import PulseTrainProcess
 from .trend_season import TrendSeasonAnomalyProcess
 
 __all__ = [
     "ECGProcess",
     "ECGRhythmParams",
+    "ECGMorphologyParams",
     "ConstantLatentNode",
     "ConstantProcess",
     "CurriculumProcess",
@@ -40,6 +42,7 @@ __all__ = [
     "ProcessOp",
     "ProcessState",
     "PulseTrainProcess",
+    "SampleMultiLabelNode",
     "SampleLabelNode",
     "SampleLabelsNode",
     "SetLabelsNode",
