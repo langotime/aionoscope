@@ -2,15 +2,15 @@ from __future__ import annotations
 
 import torch
 
-from toyts.core.pipeline import SynthPipeline
-from toyts.core.utils import utils_make_canonical_A0, utils_make_random_A0
-from toyts.kernels.pqrst import make_pqrst_kernel_bank, pqrst_kernel_size
-from toyts.processes.pulse_train import PulseTrainProcess
-from toyts.views.ecg_leads import ECGLeadsView
-from toyts.views.events import EventImpulseView, KernelConvView
-from toyts.views.noise import BaselineWanderView, GaussianNoiseView
-from toyts.views.units import NormalizeView
-from toyts.views.sampling import SamplingAggregationView
+from aiono.core.pipeline import SynthPipeline
+from aiono.core.utils import utils_make_canonical_A0, utils_make_random_A0
+from aiono.kernels.pqrst import make_pqrst_kernel_bank, pqrst_kernel_size
+from aiono.processes.pulse_train import PulseTrainProcess
+from aiono.views.ecg_leads import ECGLeadsView
+from aiono.views.events import EventImpulseView, KernelConvView
+from aiono.views.noise import BaselineWanderView, GaussianNoiseView
+from aiono.views.units import NormalizeView
+from aiono.views.sampling import SamplingAggregationView
 
 
 def main() -> None:

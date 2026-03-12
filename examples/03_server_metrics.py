@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import torch
 
-from toyts.core.pipeline import SynthPipeline
-from toyts.processes.trend_season import TrendSeasonAnomalyProcess
-from toyts.views.units import (
+from aiono.core.pipeline import SynthPipeline
+from aiono.processes.trend_season import TrendSeasonAnomalyProcess
+from aiono.views.units import (
     ClippingView,
     NormalizeView,
     UnitsAbsoluteView,

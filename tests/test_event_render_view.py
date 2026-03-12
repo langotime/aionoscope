@@ -4,7 +4,7 @@ import math
 
 import torch
 
-from toyts import EventBatch, EventRenderView, EventSchema, LatentState
+from aiono import EventBatch, EventRenderView, EventSchema, LatentState
 
 
 def _make_state(*, events: EventBatch, seq_len: int, sample_rate_hz: float) -> LatentState:

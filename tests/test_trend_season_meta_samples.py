@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import torch
 
-from toyts import TrendSeasonAnomalyProcess
+from aiono import TrendSeasonAnomalyProcess
 
 
 def test_trend_season_samples_meta() -> None:

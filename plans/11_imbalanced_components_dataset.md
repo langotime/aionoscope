@@ -18,7 +18,7 @@ This makes it impossible to express “component X is 0.1% of the dataset” wit
 
 ## Proposed change (one best solution, minimal API surface)
 ### 1) Add a reusable **class sampler** to `EnableComponentsNode`
-Instead of adding a node-specific `component_weights=...` parameter, extend `toyts/processes/nodes.py:EnableComponentsNode` with a single optional argument that is a **Sampler** over class indices:
+Instead of adding a node-specific `component_weights=...` parameter, extend `aiono/processes/nodes.py:EnableComponentsNode` with a single optional argument that is a **Sampler** over class indices:
 
 ```python
 EnableComponentsNode(
@@ -33,7 +33,7 @@ Behavior:
 - `component_id is not None` → use the sampler to sample `component_id: int64[B]` with an arbitrary (possibly highly imbalanced) distribution.
 
 Why this is better:
-- The sampling policy lives in a **Sampler** (`CategoricalSampler`, `ChoiceSampler`, custom Sampler), so the same sampler can be reused anywhere else in ToyTS that needs non-uniform categorical sampling.
+- The sampling policy lives in a **Sampler** (`CategoricalSampler`, `ChoiceSampler`, custom Sampler), so the same sampler can be reused anywhere else in Aionoscope that needs non-uniform categorical sampling.
 - `EnableComponentsNode` stays focused on one job: “turn a sampled component id / k-hot selection into `enabled` masks and labels”.
 
 Fail-fast validation (no silent defaults):

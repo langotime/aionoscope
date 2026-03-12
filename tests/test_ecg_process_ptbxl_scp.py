@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import torch
 
-from toyts import ECGMorphologyParams, ECGProcess, ECGRhythmParams
-from toyts.ptbxl import PTBXL_EVENT_TYPE_NAMES, PTBXLLabelSetSampler, ptbxl_all_codes
+from aiono import ECGMorphologyParams, ECGProcess, ECGRhythmParams
+from aiono.ptbxl import PTBXL_EVENT_TYPE_NAMES, PTBXLLabelSetSampler, ptbxl_all_codes
 
 
 def _make_process(*, seq_len: int, sample_rate_hz: float) -> ECGProcess:

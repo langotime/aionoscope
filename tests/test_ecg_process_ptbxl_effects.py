@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import torch
 
-from toyts import ECGMorphologyParams, ECGProcess, ECGRhythmParams
-from toyts.core.samplers import Sampler
-from toyts.ptbxl import ptbxl_all_codes
+from aiono import ECGMorphologyParams, ECGProcess, ECGRhythmParams
+from aiono.core.samplers import Sampler
+from aiono.ptbxl import ptbxl_all_codes
 
 
 class FixedLabelSampler(Sampler):

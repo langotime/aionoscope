@@ -219,7 +219,7 @@ Open point для ревью: хотим ли мы сразу делать “va
 ## Публичный API (как пользователь будет писать код)
 Пример (после внедрения):
 ```python
-from toyts import (
+from aiono import (
   PulseTrainProcess, NoiseView,
   ConstantSampler, UniformSampler, LogUniformSampler,
 )
@@ -246,23 +246,23 @@ noisy_view = NoiseView(noise_std=LogUniformSampler(0.05, 0.25))
 
 ## План реализации (одна фаза, но с проверяемыми шагами)
 1) **Core: samplers**
-   - Добавить `toyts/core/samplers.py`: интерфейс + реализации MVP sampler-ов.
-   - Добавить `toyts/core/sampling_params.py` (или аналогичный): `sampler_from(...)`, `process_sample_and_record(...)`, `view_sample_and_record(...)`.
-   - Экспортировать sampler-ы из `toyts/__init__.py`.
+   - Добавить `aiono/core/samplers.py`: интерфейс + реализации MVP sampler-ов.
+   - Добавить `aiono/core/sampling_params.py` (или аналогичный): `sampler_from(...)`, `process_sample_and_record(...)`, `view_sample_and_record(...)`.
+   - Экспортировать sampler-ы из `aiono/__init__.py`.
 
 2) **Meta schema plumbing**
    - Зафиксировать ключ `meta["samples"]` на process-стороне (как в `plans/8_sampled_params_meta.md`).
    - Для view: добавить в meta каждого view `samples/spec` (не ломая текущий `Observation.view_meta()`).
 
 3) **Processes**
-   - `toyts/processes/pulse_train.py`: перевести параметры на sampler-ы, записывать sampled значения в `meta["samples"]`.
-   - (Если нужно) `toyts/processes/nodes.py`: добавить `SampleParamsNode` и/или расширить `EventTrainNode` для чтения sampled параметров.
-   - `toyts/processes/trend_season.py`: сохранить already-sampled параметры в `meta["samples"]` (без изменения поведения генерации).
+   - `aiono/processes/pulse_train.py`: перевести параметры на sampler-ы, записывать sampled значения в `meta["samples"]`.
+   - (Если нужно) `aiono/processes/nodes.py`: добавить `SampleParamsNode` и/или расширить `EventTrainNode` для чтения sampled параметров.
+   - `aiono/processes/trend_season.py`: сохранить already-sampled параметры в `meta["samples"]` (без изменения поведения генерации).
 
 4) **Views**
-   - `toyts/views/noise.py:NoiseView` → `noise_std` sampler + meta export.
-   - `toyts/views/missingness.py:MissingnessView` → prob sampler-ы + meta export (без хранения масок).
-   - (Опционально) `toyts/views/ecg_leads.py:ECGLeadsView` → sampler-ы для `jitter_std/max_delay` + meta export.
+   - `aiono/views/noise.py:NoiseView` → `noise_std` sampler + meta export.
+   - `aiono/views/missingness.py:MissingnessView` → prob sampler-ы + meta export (без хранения масок).
+   - (Опционально) `aiono/views/ecg_leads.py:ECGLeadsView` → sampler-ы для `jitter_std/max_delay` + meta export.
 
 5) **Docs + examples**
    - Обновить `DOCUMENTATION.md` и 1-2 примера в `examples/` (и соответствующие `.ipynb`) так, чтобы было видно:

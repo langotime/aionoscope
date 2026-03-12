@@ -8,7 +8,7 @@ import torch
 from torch import nn
 from torch.profiler import ProfilerActivity, profile
 
-from toyts import (
+from aiono import (
     ECGLeadsView,
     GaussianNoiseView,
     PulseTrainProcess,
@@ -17,12 +17,12 @@ from toyts import (
     TrendSeasonAnomalyProcess,
     UnitsAbsoluteView,
 )
-from toyts.core.utils import utils_make_canonical_A0
+from aiono.core.utils import utils_make_canonical_A0
 
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Profile ToyTS batch generation with torch.profiler.",
+        description="Profile Aionoscope batch generation with torch.profiler.",
     )
     parser.add_argument("--process", choices=["pulse", "trend"], required=True)
     parser.add_argument("--device", choices=["cpu", "cuda"], required=True)

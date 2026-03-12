@@ -1,5 +1,5 @@
 [project]
-name = "toyts"
+name = "aiono"
 version = "0.1.0"
 description = "PyTorch-native synthetic time series dataset generator."
 requires-python = ">=3.10"
@@ -15,10 +15,10 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["toyts*"]
+include = ["aiono*"]
 
 [tool.setuptools.package-data]
-toyts = ["assets/**/*.csv"]
+aiono = ["assets/**/*.csv"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

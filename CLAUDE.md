@@ -4,7 +4,7 @@ This file provides guidance to AI agents when working with code in this reposito
 
 ## Repository Overview
 
-This repo contains source code of the ToyTS library - PyTorch-native online synthetic time series dataset generator.
+This repo contains source code of the Aionoscope library - PyTorch-native online synthetic time series dataset generator.
 
 ## Work planning
 

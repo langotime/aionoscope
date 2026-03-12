@@ -7,8 +7,8 @@ import torch
 
 import pytest
 
-from toyts import CategoricalSampler, EnableComponentsNode, Sampler, WeightedPermutationSampler
-from toyts.processes.graph import ProcessState
+from aiono import CategoricalSampler, EnableComponentsNode, Sampler, WeightedPermutationSampler
+from aiono.processes.graph import ProcessState
 
 
 @dataclass(frozen=True)

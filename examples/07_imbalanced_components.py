@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import torch
 from torch.utils.data import DataLoader
 
-from toyts import (
+from aiono import (
     CategoricalSampler,
     EnableComponentsNode,
     EventRenderView,
@@ -25,14 +25,14 @@ from toyts import (
     UniformSampler,
     ViewChain,
 )
-from toyts.datasets import SynthBatchIterableDataset
-from toyts.processes.constant import ConstantLatentNode
-from toyts.views.noise import (
+from aiono.datasets import SynthBatchIterableDataset
+from aiono.processes.constant import ConstantLatentNode
+from aiono.views.noise import (
     GaussianNoiseView,
     RandomWalkNoiseView,
     UniformNoiseView,
 )
-from toyts.views.periodic import (
+from aiono.views.periodic import (
     SawtoothWaveView,
     SineWaveView,
     SquareWaveView,
@@ -161,7 +161,7 @@ def plot_grid(
     for ax in axes_list[num_plots:]:
         ax.axis("off")
 
-    fig.suptitle("ToyTS: imbalanced component sampling (per-sample enabled masks)", fontsize=12)
+    fig.suptitle("Aionoscope: imbalanced component sampling (per-sample enabled masks)", fontsize=12)
     fig.tight_layout()
     return fig
 

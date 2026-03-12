@@ -1,7 +1,7 @@
 # Plan: PTB-XL ECG rhythm simulation (12 rhythm SCP labels)
 
 ## Goal
-Extend ToyTS ECG simulation so it can generate ECG-like signals labeled with **all 12 PTB-XL “rhythm” SCP codes** from `scp_statements.csv`, while keeping the design **extendable to the full 71 SCP labels**.
+Extend Aionoscope ECG simulation so it can generate ECG-like signals labeled with **all 12 PTB-XL “rhythm” SCP codes** from `scp_statements.csv`, while keeping the design **extendable to the full 71 SCP labels**.
 
 Rhythm codes (from `scp_statements.csv`, `rhythm != ""`):
 - `SR` (sinus rhythm)
@@ -39,14 +39,14 @@ Rhythm codes (from `scp_statements.csv`, `rhythm != ""`):
 2) Move/copy this file into the installable package as data (so users don’t need repo-root files).
 
 ### Planned code addition
-- `toyts/ptbxl/scp.py`
+- `aiono/ptbxl/scp.py`
   - `load_scp_statements() -> dict[str, SCPStatement]` (parses packaged CSV)
   - `ptbxl_rhythm_codes() -> list[str]` (returns the 12 codes, CSV order)
   - `ptbxl_all_codes() -> list[str]` (all 71 SCP codes, CSV order)
   - `ptbxl_codes_by_group(group: Literal["diagnostic","form","rhythm"]) -> list[str]`
 
 ### Packaging
-- Add `toyts/assets/ptbxl/scp_statements.csv` and include it via setuptools `package-data`.
+- Add `aiono/assets/ptbxl/scp_statements.csv` and include it via setuptools `package-data`.
 
 Why: this keeps the future “support all 71 labels” path incremental and avoids hardcoding label lists in multiple places.
 
@@ -54,7 +54,7 @@ Why: this keeps the future “support all 71 labels” path incremental and avoi
 
 ## Proposed public API (rhythm generation)
 ### New process
-- `toyts.processes.ECGProcess`
+- `aiono.processes.ECGProcess`
 
 Constructor (high-level):
 - `seq_len: int`
@@ -75,7 +75,7 @@ Rationale:
 
 ### Kernel bank helper (for views)
 Add a kernels helper that matches the process’ `EventSchema.type_names`:
-- `toyts.kernels.make_ecg_kernel_bank(...) -> torch.Tensor` returning `[K, T, W]`
+- `aiono.kernels.make_ecg_kernel_bank(...) -> torch.Tensor` returning `[K, T, W]`
 
 This will build:
 - A single PQRST-like kernel for a canonical beat event type (`type_name="beat"`) by reusing `make_pqrst_kernel_bank(shape_names=["gaussian"], ...)`.
@@ -164,7 +164,7 @@ Critical constraint: any *label-dependent* artifacts must remain in the process 
 
 ## Extendability to all 71 SCP labels (design choices now)
 ### 1) One label taxonomy module, one stable ordering
-The `toyts/ptbxl/scp.py` loader provides:
+The `aiono/ptbxl/scp.py` loader provides:
 - stable list of 71 codes and group membership,
 - descriptions and (later) diagnostic class/subclass.
 
@@ -233,8 +233,8 @@ All tests must run via `uv run pytest`.
 ---
 
 ## Implementation checklist (single phase, but ordered)
-1) Add `toyts/ptbxl/scp.py` + package data wiring + loader tests.
-2) Add kernel bank helper for `["beat","pace_spike","flutter_wave"]` (small refactor of `toyts/kernels/pqrst.py` if needed to avoid duplication) + unit tests for shape.
+1) Add `aiono/ptbxl/scp.py` + package data wiring + loader tests.
+2) Add kernel bank helper for `["beat","pace_spike","flutter_wave"]` (small refactor of `aiono/kernels/pqrst.py` if needed to avoid duplication) + unit tests for shape.
 3) Add `ECGProcess` + ECG-specific process nodes for beat/aux events.
 4) Add docs + example script/notebook.
 5) Add shortcut tests + determinism tests for the new process.

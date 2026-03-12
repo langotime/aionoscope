@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import torch
 
-from toyts import EventSchema, ProcessGraph, SingleEventNode, TimeJitterNode
+from aiono import EventSchema, ProcessGraph, SingleEventNode, TimeJitterNode
 
 
 def test_time_jitter_samples_meta() -> None:

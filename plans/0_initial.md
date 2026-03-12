@@ -1,4 +1,4 @@
-# ToyTS: синтетический датасет временных рядов с разделением Process vs View (GPU, PyTorch)
+# Aionoscope: синтетический датасет временных рядов с разделением Process vs View (GPU, PyTorch)
 **Назначение:** технический план для AI coding agent (реализация библиотеки/репозитория).
 
 ---
@@ -136,7 +136,7 @@ class SynthPipeline(nn.Module):
 ## 5) Архитектура пакета (предлагаемая структура репозитория)
 
 ```
-toyts/
+aiono/
   core/
     types.py            # LatentState, Observation
     rng.py              # seed utilities, torch.Generator helpers

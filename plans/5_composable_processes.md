@@ -17,7 +17,7 @@
 ### 1) События: один канонический формат (без ragged Python структур)
 Чтобы не плодить форматы и не уехать в Python loops, канонический формат событий — padded тензоры + mask.
 
-Файл: `toyts/core/events.py`
+Файл: `aiono/core/events.py`
 
 ```python
 from __future__ import annotations
@@ -51,14 +51,14 @@ class EventBatch:
 - `event types ≠ channels`. Событие имеет `type_id`, а **view** решает маппинг `type_id → channel(s)` и/или `type_id → kernel`.
 
 ### 2) Расширение `LatentState` под события
-Файл: `toyts/core/types.py`
+Файл: `aiono/core/types.py`
 - Добавить поле: `events: EventBatch | None`.
 - Для event-only процессов: `latent=None`, `events!=None`.
 - Для dense-only процессов: `events=None`, `latent!=None`.
 - Для смешанных: допускается оба.
 
 ### 3) ProcessGraph: задаем граф прямо в коде (без `requires/provides`)
-Файл: `toyts/processes/graph.py`
+Файл: `aiono/processes/graph.py`
 
 ```python
 from __future__ import annotations
@@ -238,10 +238,10 @@ RNG:
 
 ## План работ (конкретные шаги реализации)
 1) **Core types**
-   - `toyts/core/events.py`: `EventSchema`, `EventBatch`.
-   - `toyts/core/types.py`: добавить `LatentState.events`.
+   - `aiono/core/events.py`: `EventSchema`, `EventBatch`.
+   - `aiono/core/types.py`: добавить `LatentState.events`.
 2) **ProcessGraph runtime**
-   - `toyts/processes/graph.py`: `ProcessState`, `ProcessOp`, `ProcessNode`, `Seq`, `Switch`, `Parallel`, `Scope`, `ProcessGraph`, `ProcessChain`.
+   - `aiono/processes/graph.py`: `ProcessState`, `ProcessOp`, `ProcessNode`, `Seq`, `Switch`, `Parallel`, `Scope`, `ProcessGraph`, `ProcessChain`.
    - Исполнение строго по структуре графа (list/Seq-части в порядке, branching через `Switch`, параллельные источники через `Parallel`).
    - Fail-fast проверки ключей на входе узлов (нет `requires/provides` деклараций).
    - RNG splitting внутри container-ops (`Seq/Switch/Parallel`) + `trace_seeds` в meta.

@@ -1,12 +1,12 @@
-# ToyTS Documentation
+# Aionoscope Documentation
 
 ## Introduction
 
-ToyTS is a PyTorch-native synthetic time series dataset generator designed for researchers and developers working on machine learning for time series data. Its primary goal is to provide a flexible and powerful tool for benchmarking Self-Supervised Learning (SSL) and supervised models.
+Aionoscope is a PyTorch-native synthetic time series dataset generator designed for researchers and developers working on machine learning for time series data. Its primary goal is to provide a flexible and powerful tool for benchmarking Self-Supervised Learning (SSL) and supervised models.
 
-The core philosophy of ToyTS is the strict separation of the data-generating **Process** from the **View** or observation model. This design principle is crucial for developing and testing models that are robust to superficial variations in the data and can learn the underlying dynamics of the system.
+The core philosophy of Aionoscope is the strict separation of the data-generating **Process** from the **View** or observation model. This design principle is crucial for developing and testing models that are robust to superficial variations in the data and can learn the underlying dynamics of the system.
 
-ToyTS is intended to support composable processes across domains. The goal is to generate everything from the simplest time series (single event, repeated events of one type) to complex combinations, so SSL models can be trained with a curriculum that starts with isolated events and gradually increases complexity.
+Aionoscope is intended to support composable processes across domains. The goal is to generate everything from the simplest time series (single event, repeated events of one type) to complex combinations, so SSL models can be trained with a curriculum that starts with isolated events and gradually increases complexity.
 
 ### Design Goals
 
@@ -16,10 +16,10 @@ ToyTS is intended to support composable processes across domains. The goal is to
 *   **Curriculum-ready**: Gradually scale complexity from single events to multi-component mixtures.
 *   **Reproducible**: Deterministic outputs given a fixed seed and graph.
 
-### Why ToyTS?
+### Why Aionoscope?
 
-*   **Benchmark SSL**: ToyTS allows you to generate multiple, augmented "views" of the same underlying data, which is a key requirement for many SSL techniques, such as contrastive learning.
-*   **Avoid Shortcuts**: By separating the latent process (which determines the labels) from the view (which introduces noise, augmentations, and other distortions), ToyTS helps in training models that learn meaningful features rather than exploiting superficial cues.
+*   **Benchmark SSL**: Aionoscope allows you to generate multiple, augmented "views" of the same underlying data, which is a key requirement for many SSL techniques, such as contrastive learning.
+*   **Avoid Shortcuts**: By separating the latent process (which determines the labels) from the view (which introduces noise, augmentations, and other distortions), Aionoscope helps in training models that learn meaningful features rather than exploiting superficial cues.
 *   **GPU-Native**: The entire data generation pipeline is implemented in PyTorch, making it extremely fast and suitable for generating data on-the-fly during training, directly on the GPU.
 *   **Modular and Extensible**: The library is designed to be easily extensible. You can create your own custom `Process` and `View` modules to simulate a wide variety of time series data.
 
@@ -72,7 +72,7 @@ The library is built around a unidirectional data flow, which can be visualized 
 
 ## Examples Guide
 
-The `examples/` directory contains minimal, runnable scripts (and matching `.ipynb` notebooks) that demonstrate common ToyTS patterns. Run examples with `uv run python -m` or `uv run python`, e.g. `uv run python examples/06_basic_components.py`.
+The `examples/` directory contains minimal, runnable scripts (and matching `.ipynb` notebooks) that demonstrate common Aionoscope patterns. Run examples with `uv run python -m` or `uv run python`, e.g. `uv run python examples/06_basic_components.py`.
 
 Recommended reading order:
 
@@ -118,7 +118,7 @@ masks = MissingnessView.sample_masks(
 
 Many research datasets need **per-sample mixtures**: some samples contain 1 component, others contain 2–3 (trend + periodic + noise, etc.). A `ViewChain` / `nn.Sequential` is a static pipeline, so you cannot “remove” modules on a per-sample basis without building separate pipelines.
 
-ToyTS supports runtime per-sample gating via **enabled masks**:
+Aionoscope supports runtime per-sample gating via **enabled masks**:
 
 *   **Process side**: write `state.meta["enabled"][key] = bool[B]` for each component key.
 *   **View side**: component views accept `enabled_key=key` and gate their contribution using the corresponding `bool[B]` mask from process metadata (`Observation.meta["process"]` after the first view).
@@ -139,7 +139,7 @@ See `examples/06_basic_components.py` for a minimal dataset using enabled masks.
 For **imbalanced** single-component datasets (rare components), sample `component_id` with a non-uniform sampler (requires `num_enabled=1`):
 
 ```python
-from toyts import CategoricalSampler, EnableComponentsNode
+from aiono import CategoricalSampler, EnableComponentsNode
 
 EnableComponentsNode(
     component_keys=["a", "b", "rare"],
@@ -154,7 +154,7 @@ For **imbalanced k-hot mixtures** (`num_enabled > 1`), provide a sampler that re
 ordering (permutation) of component indices:
 
 ```python
-from toyts import EnableComponentsNode, WeightedPermutationSampler
+from aiono import EnableComponentsNode, WeightedPermutationSampler
 
 EnableComponentsNode(
     component_keys=["a", "b", "rare"],
@@ -189,7 +189,7 @@ To install the library, you can clone the repository and install it in editable 
 
 ```bash
 git clone <repository-url>
-cd toyts
+cd aionoscope
 pip install -e .
 ```
 
@@ -200,12 +200,12 @@ This example builds a small event process from two generator nodes and merges th
 ```python
 import torch
 
-from toyts.core.events import EventSchema
-from toyts.core.pipeline import SynthPipeline
-from toyts.processes.graph import ProcessGraph
-from toyts import UniformSampler
-from toyts.processes.nodes import EventTrainNode, SingleEventNode, UnionEventsNode
-from toyts.views.events import EventStreamView
+from aiono.core.events import EventSchema
+from aiono.core.pipeline import SynthPipeline
+from aiono.processes.graph import ProcessGraph
+from aiono import UniformSampler
+from aiono.processes.nodes import EventTrainNode, SingleEventNode, UnionEventsNode
+from aiono.views.events import EventStreamView
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -256,7 +256,7 @@ events = batch["events"].x  # [B, E, 2+P]
 
 ## Quick Start: A Detailed Walk-through
 
-Let's walk through the example from `toyts/examples/01_simple_pulse.py` to understand how to use the library.
+Let's walk through the example from `examples/01_simple_pulse.py` to understand how to use the library.
 `PulseTrainProcess` is a reusable wrapper around a richer process graph; this walkthrough uses it to demonstrate ECG-style rendering.
 
 ### Step 1: Define the Process
@@ -264,7 +264,7 @@ Let's walk through the example from `toyts/examples/01_simple_pulse.py` to under
 First, we define a `Process` that will generate our latent events. In this case, we use `PulseTrainProcess` to generate an ECG-like event stream.
 
 ```python
-from toyts.processes.pulse_train import PulseTrainProcess
+from aiono.processes.pulse_train import PulseTrainProcess
 
 process = PulseTrainProcess(
     seq_len=1024,
@@ -285,13 +285,13 @@ Next, we define a set of `Views` to render events into latent components, then t
 
 ```python
 import torch
-from toyts.core.utils import utils_make_canonical_A0
-from toyts.kernels.pqrst import make_pqrst_kernel_bank, pqrst_kernel_size
-from toyts.views.ecg_leads import ECGLeadsView
-from toyts.views.events import EventImpulseView, KernelConvView
-from toyts.views.noise import GaussianNoiseView, BaselineWanderView
-from toyts.views.sampling import SamplingAggregationView
-from toyts.views.units import NormalizeView
+from aiono.core.utils import utils_make_canonical_A0
+from aiono.kernels.pqrst import make_pqrst_kernel_bank, pqrst_kernel_size
+from aiono.views.ecg_leads import ECGLeadsView
+from aiono.views.events import EventImpulseView, KernelConvView
+from aiono.views.noise import GaussianNoiseView, BaselineWanderView
+from aiono.views.sampling import SamplingAggregationView
+from aiono.views.units import NormalizeView
 
 spacing = (process.seq_len - 1) / (process.num_pulses + 1)
 kernel_size = pqrst_kernel_size(spacing=spacing, support_sigma=6.0)
@@ -339,7 +339,7 @@ Here, we define three views:
 Now, we create a `SynthPipeline` with our process and views, move it to the desired device, and generate a batch of data.
 
 ```python
-from toyts.core.pipeline import SynthPipeline
+from aiono.core.pipeline import SynthPipeline
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 rng = torch.Generator(device=device).manual_seed(1234)
@@ -369,7 +369,7 @@ print(labels)
 
 ```python
 import torch
-from toyts import (
+from aiono import (
     ECGMorphologyParams,
     ECGProcess,
     ECGRhythmParams,
@@ -379,7 +379,7 @@ from toyts import (
     make_ptbxl_kernel_bank,
     ptbxl_kernel_size,
 )
-from toyts.ptbxl import PTBXLLabelSetSampler, ptbxl_all_codes
+from aiono.ptbxl import PTBXLLabelSetSampler, ptbxl_all_codes
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 rng = torch.Generator(device=device).manual_seed(1234)
@@ -422,19 +422,19 @@ rhythm = scp[:, label_groups["rhythm"]]  # [B, 12]
 
 ### Custom Process
 
-To create a custom process, you need to inherit from `toyts.processes.base.Process` and implement the `forward` method. The `forward` method should return a `LatentState` object.
+To create a custom process, you need to inherit from `aiono.processes.base.Process` and implement the `forward` method. The `forward` method should return a `LatentState` object.
 
 ### Custom View
 
-To create a custom view, you need to inherit from `toyts.views.base.View` and implement the `forward` method. The `forward` method takes a `LatentState` or `Observation` as input and should return an `Observation` object.
+To create a custom view, you need to inherit from `aiono.views.base.View` and implement the `forward` method. The `forward` method takes a `LatentState` or `Observation` as input and should return an `Observation` object.
 
 ## Library Architecture
 
-*   `toyts.core`: Base types (`LatentState`, `Observation`) and pipeline logic.
-*   `toyts.processes`: Latent generators (e.g., `PulseTrainProcess`, `TrendSeasonAnomalyProcess`).
-*   `toyts.views`: Observation transforms (e.g., `ECGLeadsView`, `UnitsAbsoluteView`, `SamplingAggregationView`, `MissingnessView`).
-*   `toyts.kernels`: Signal morphology kernels used by some processes.
-*   `toyts.datasets`: Iterable datasets for easy integration with `torch.utils.data.DataLoader`.
-*   `toyts.examples`: Example scripts to get you started.
+*   `aiono.core`: Base types (`LatentState`, `Observation`) and pipeline logic.
+*   `aiono.processes`: Latent generators (e.g., `PulseTrainProcess`, `TrendSeasonAnomalyProcess`).
+*   `aiono.views`: Observation transforms (e.g., `ECGLeadsView`, `UnitsAbsoluteView`, `SamplingAggregationView`, `MissingnessView`).
+*   `aiono.kernels`: Signal morphology kernels used by some processes.
+*   `aiono.datasets`: Iterable datasets for easy integration with `torch.utils.data.DataLoader`.
+*   `aiono.examples`: Example scripts to get you started.
 
-This documentation provides a starting point for using ToyTS. For more details on specific modules and their parameters, please refer to the in-code docstrings.
+This documentation provides a starting point for using Aionoscope. For more details on specific modules and their parameters, please refer to the in-code docstrings.

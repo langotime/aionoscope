@@ -4,20 +4,20 @@ from pathlib import Path
 
 import torch
 
-from toyts.core.curriculum import CurriculumSchedule, curriculum_stage_histogram
-from toyts.core.events import EventSchema
-from toyts.core.pipeline import SynthPipeline
-from toyts.core.utils import utils_make_canonical_A0
-from toyts.kernels.pqrst import make_pqrst_kernel_bank, pqrst_kernel_size
-from toyts.processes.curriculum import CurriculumProcess
-from toyts.processes.graph import ProcessGraph, Switch
-from toyts.processes.nodes import EventTrainNode, SampleLabelsNode, SetLabelsNode, SingleEventNode
-from toyts.views.ecg_leads import ECGLeadsView
-from toyts.views.events import EventImpulseView, EventStreamView, KernelConvView
-from toyts.views.missingness import MissingnessView
-from toyts.views.noise import BaselineWanderView, GaussianNoiseView
-from toyts.views.units import NormalizeView
-from toyts.views.sampling import SamplingAggregationView
+from aiono.core.curriculum import CurriculumSchedule, curriculum_stage_histogram
+from aiono.core.events import EventSchema
+from aiono.core.pipeline import SynthPipeline
+from aiono.core.utils import utils_make_canonical_A0
+from aiono.kernels.pqrst import make_pqrst_kernel_bank, pqrst_kernel_size
+from aiono.processes.curriculum import CurriculumProcess
+from aiono.processes.graph import ProcessGraph, Switch
+from aiono.processes.nodes import EventTrainNode, SampleLabelsNode, SetLabelsNode, SingleEventNode
+from aiono.views.ecg_leads import ECGLeadsView
+from aiono.views.events import EventImpulseView, EventStreamView, KernelConvView
+from aiono.views.missingness import MissingnessView
+from aiono.views.noise import BaselineWanderView, GaussianNoiseView
+from aiono.views.units import NormalizeView
+from aiono.views.sampling import SamplingAggregationView
 
 
 def main() -> None:

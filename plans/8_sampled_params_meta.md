@@ -22,10 +22,10 @@ This keeps process meta flat for existing keys while isolating sampled params.
 ## Audit: current gaps
 
 ### Processes
-- `TrendSeasonAnomalyProcess` (toyts/processes/trend_season.py):
+- `TrendSeasonAnomalyProcess` (aiono/processes/trend_season.py):
   - sampled but **not stored**: `slope`/`slope_noise`, `offset`, `season_freq`, `season_phase`, `season_amp` (after spiky boost), `anomaly_amp`, `anomaly_center`
   - `extra_noise` is full-size `[B, K-3, L]` → **do not store**; only store seed/std if needed
-- `EventTrainNode` (toyts/processes/nodes.py):
+- `EventTrainNode` (aiono/processes/nodes.py):
   - `phase_offset_samples` already stored
   - sampled but **not stored**: `intervals` (random/missed), `missed_indices` (missed_beat mode)
   - event `times` and `amplitude` already live in `EventBatch` → **no duplication**
@@ -33,7 +33,7 @@ This keeps process meta flat for existing keys while isolating sampled params.
   - sampled but **not stored**: jitter noise `[B, E]` (not in outputs)
 
 ### Views
-- `MissingnessView` (toyts/views/missingness.py):
+- `MissingnessView` (aiono/views/missingness.py):
   - sampled but **not stored**: `keep_mask`, `apply_gap`, `gap_start`, `hold_mask` (full-size / large)
   - requirement: **do not store** masks; provide a deterministic one-call regen method from meta
 - `NoiseView`:

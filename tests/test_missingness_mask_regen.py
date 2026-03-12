@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import torch
 
-from toyts import MissingnessView, Observation, ViewChain
+from aiono import MissingnessView, Observation, ViewChain
 
 
 def test_missingness_mask_regen() -> None:

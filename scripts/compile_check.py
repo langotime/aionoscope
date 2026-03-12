@@ -5,7 +5,7 @@ import argparse
 import torch
 from torch import nn
 
-from toyts import (
+from aiono import (
     ECGLeadsView,
     GaussianNoiseView,
     PulseTrainProcess,
@@ -14,12 +14,12 @@ from toyts import (
     TrendSeasonAnomalyProcess,
     UnitsAbsoluteView,
 )
-from toyts.core.utils import utils_make_canonical_A0
+from aiono.core.utils import utils_make_canonical_A0
 
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Check torch.compile compatibility for ToyTS pipelines.",
+        description="Check torch.compile compatibility for Aionoscope pipelines.",
     )
     parser.add_argument("--process", choices=["pulse", "trend"], required=True)
     parser.add_argument("--device", choices=["cpu", "cuda"], required=True)

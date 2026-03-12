@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import torch
 from torch import nn
 
-from toyts import (
+from aiono import (
     BaselineWanderView,
     ECGLeadsView,
     EventImpulseView,
@@ -18,7 +18,7 @@ from toyts import (
     make_pqrst_kernel_bank,
     pqrst_kernel_size,
 )
-from toyts.core.utils import utils_make_canonical_A0
+from aiono.core.utils import utils_make_canonical_A0
 
 
 def main() -> None:

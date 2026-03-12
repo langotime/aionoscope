@@ -75,7 +75,7 @@ Final `Observation.meta` will contain:
 No view keys are merged to the top level; callers must choose how to merge or index `meta["views"]`.
 
 ## Implementation steps (single phase)
-1) **Implement meta accumulation in `toyts/views/base.py:ViewChain.forward()`**
+1) **Implement meta accumulation in `aiono/views/base.py:ViewChain.forward()`**
    - Carry forward an existing `views` list if the input is an `Observation` (supports nested chains).
    - After each view:
      - append a trace entry (view meta sans `"process"`)
@@ -84,7 +84,7 @@ No view keys are merged to the top level; callers must choose how to merge or in
    - Fail fast with a clear error if the view returns meta without `"process"` (preserves current invariants used by `utils_extract_process_meta`).
 
 2) **Export missing sampled parameters**
-   - `toyts/views/noise.py:BaselineWanderView`:
+   - `aiono/views/noise.py:BaselineWanderView`:
      - store sampled `freq`, `phase`, `amplitude` in meta
        - `freq: [B, C, 1]`, `phase: [B, C, 1]`, `amplitude: [B, C, 1]`
      - keep existing config keys (`freq_min/max`, `amplitude_std`) as well.

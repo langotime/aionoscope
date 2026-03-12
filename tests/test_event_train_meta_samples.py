@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import torch
 
-from toyts import PulseTrainProcess
+from aiono import PulseTrainProcess
 
 
 def test_event_train_samples_meta() -> None:

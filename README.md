@@ -1,10 +1,10 @@
-# ToyTS
+# Aionoscope
 
 **PyTorch-native synthetic time series dataset generator with explicit Process → View separation.**
 
-ToyTS is designed to benchmark **Self-Supervised Learning (SSL)** and supervised approaches on time series data. It provides a flexible, GPU-friendly framework to generate multi-view datasets where the underlying latent dynamics ("Process") are strictly separated from the observation model ("View").
+Aionoscope is designed to benchmark **Self-Supervised Learning (SSL)** and supervised approaches on time series data. It provides a flexible, GPU-friendly framework to generate multi-view datasets where the underlying latent dynamics ("Process") are strictly separated from the observation model ("View").
 
-ToyTS is intended to support composable process graphs across domains. The goal is to build both very simple series (single event, repeated events of one type) and progressively richer combinations, enabling curriculum-style training where SSL models start from isolated events and scale to complex multi-component dynamics.
+Aionoscope is intended to support composable process graphs across domains. The goal is to build both very simple series (single event, repeated events of one type) and progressively richer combinations, enabling curriculum-style training where SSL models start from isolated events and scale to complex multi-component dynamics.
 
 ## Design Goals
 
@@ -59,12 +59,12 @@ pip install -e .
 ```python
 import torch
 
-from toyts.core.events import EventSchema
-from toyts.core.pipeline import SynthPipeline
-from toyts.processes.graph import ProcessGraph
-from toyts import UniformSampler
-from toyts.processes.nodes import EventTrainNode, SingleEventNode, UnionEventsNode
-from toyts.views.events import EventStreamView
+from aiono.core.events import EventSchema
+from aiono.core.pipeline import SynthPipeline
+from aiono.processes.graph import ProcessGraph
+from aiono import UniformSampler
+from aiono.processes.nodes import EventTrainNode, SingleEventNode, UnionEventsNode
+from aiono.views.events import EventStreamView
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -119,11 +119,11 @@ events = batch["events"].x  # [B, E, 2+P]
 
 ```python
 import torch
-from toyts.core import SynthPipeline
-from toyts.core.utils import utils_make_canonical_A0
-from toyts.kernels import make_pqrst_kernel_bank, pqrst_kernel_size
-from toyts.processes import PulseTrainProcess
-from toyts.views import ECGLeadsView, EventImpulseView, KernelConvView, GaussianNoiseView
+from aiono.core import SynthPipeline
+from aiono.core.utils import utils_make_canonical_A0
+from aiono.kernels import make_pqrst_kernel_bank, pqrst_kernel_size
+from aiono.processes import PulseTrainProcess
+from aiono.views import ECGLeadsView, EventImpulseView, KernelConvView, GaussianNoiseView
 
 # 1. Define the Process (Latent Dynamics)
 # Generates an event stream with rhythm and shape labels
@@ -183,7 +183,7 @@ labels = batch["clean"].y        # {"rhythm": [64], "shape": [64]}
 
 ```python
 import torch
-from toyts import (
+from aiono import (
     ECGMorphologyParams,
     ECGProcess,
     ECGRhythmParams,
@@ -193,7 +193,7 @@ from toyts import (
     make_ptbxl_kernel_bank,
     ptbxl_kernel_size,
 )
-from toyts.ptbxl import PTBXLLabelSetSampler, ptbxl_all_codes
+from aiono.ptbxl import PTBXLLabelSetSampler, ptbxl_all_codes
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -233,7 +233,7 @@ rhythm = scp[:, label_groups["rhythm"]]  # [64, 12]
 
 ## Architecture
 
-*   `toyts.core`: Base types (`LatentState`, `Observation`) and pipeline logic.
-*   `toyts.processes`: Latent generators (e.g., `PulseTrain`, `TrendSeasonAnomaly`).
-*   `toyts.views`: Observation transforms (e.g., `ECGLeads`, `Units`, `Sampling`, `Missingness`).
-*   `toyts.kernels`: Signal morphology kernels.
+*   `aiono.core`: Base types (`LatentState`, `Observation`) and pipeline logic.
+*   `aiono.processes`: Latent generators (e.g., `PulseTrain`, `TrendSeasonAnomaly`).
+*   `aiono.views`: Observation transforms (e.g., `ECGLeads`, `Units`, `Sampling`, `Missingness`).
+*   `aiono.kernels`: Signal morphology kernels.

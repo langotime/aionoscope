@@ -10,7 +10,7 @@ This enables experiments like: “within the same batch, some samples have 1 com
 - No new dataset/example yet (core support first).
 
 ## Proposed API change (minimal + backwards compatible)
-Update `toyts/processes/nodes.py:EnableComponentsNode`:
+Update `aiono/processes/nodes.py:EnableComponentsNode`:
 
 - Change constructor from:
   - `EnableComponentsNode(component_keys: list[str], num_enabled: int)`
@@ -23,7 +23,7 @@ Semantics:
 - `state.y["component_id"]` is emitted **only when all samples have `k == 1`** (the “single-component classification” case). Otherwise it is omitted because it is not well-defined for multi-component samples.
 
 ## Implementation details (KISS)
-File: `toyts/processes/nodes.py`
+File: `aiono/processes/nodes.py`
 
 ### 1) Init-time normalization
 - Keep existing validation for `component_keys` (non-empty, unique, non-empty strings).
@@ -58,7 +58,7 @@ Single approach for all k (simple + deterministic):
   - Keep the existing “do not overwrite enabled[...]” fail-fast behavior.
 
 ## Other components to review (expected: no changes)
-- `toyts/views/_enabled.py:views_resolve_enabled_mask` should already accept `bool[B]` masks; variable `k` only changes how many masks are `True`.
+- `aiono/views/_enabled.py:views_resolve_enabled_mask` should already accept `bool[B]` masks; variable `k` only changes how many masks are `True`.
 - Event gating (`GateEventsByEnabledNode`) already gates per-sample via `bool[B]`; variable `k` should work unchanged.
 
 ## Tests (pytest)

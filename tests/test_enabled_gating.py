@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import torch
 
-from toyts import SineWaveView, UniformSampler, ViewChain
-from toyts.core.types import Observation
-from toyts.views.noise import GaussianNoiseView
-from toyts.views.trend import LinearTrendView
+from aiono import SineWaveView, UniformSampler, ViewChain
+from aiono.core.types import Observation
+from aiono.views.noise import GaussianNoiseView
+from aiono.views.trend import LinearTrendView
 
 
 def test_component_views_respect_enabled_masks() -> None:

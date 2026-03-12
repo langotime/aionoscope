@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 import torch
 
-from toyts import (
+from aiono import (
     ECGLeadsView,
     EventImpulseView,
     KernelConvView,
@@ -13,7 +13,7 @@ from toyts import (
     make_pqrst_kernel_bank,
     pqrst_kernel_size,
 )
-from toyts.core.utils import utils_make_random_A0
+from aiono.core.utils import utils_make_random_A0
 
 
 def _make_pulse_process(seq_len: int) -> PulseTrainProcess:

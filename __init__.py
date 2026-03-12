@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-# The ToyTS library lives under the nested `toyts/toyts/` directory in this monorepo.
-# We extend the package search path so imports like `toyts.core.*` work without
+# The Aionoscope Python package lives under the nested `aiono/` directory in this monorepo.
+# We extend the package search path so imports like `aiono.core.*` work without
 # introducing duplicate module namespaces (which breaks isinstance checks).
-_NESTED_PACKAGE_DIR = Path(__file__).resolve().parent / "toyts"
+_NESTED_PACKAGE_DIR = Path(__file__).resolve().parent / "aiono"
 if not _NESTED_PACKAGE_DIR.is_dir():
     raise ImportError(
-        "Failed to import ToyTS: expected nested sources at "
+        "Failed to import Aionoscope: expected nested sources at "
         f"{_NESTED_PACKAGE_DIR}. Ensure you're running from the monorepo checkout."
     )
 __path__.append(str(_NESTED_PACKAGE_DIR))

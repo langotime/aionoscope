@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import torch
 
-from toyts import ConstantProcess, SineWaveView, SynthPipeline, UniformSampler, ViewChain
-from toyts.views.noise import GaussianNoiseView, UniformNoiseView
-from toyts.views.trend import LinearTrendView
+from aiono import ConstantProcess, SineWaveView, SynthPipeline, UniformSampler, ViewChain
+from aiono.views.noise import GaussianNoiseView, UniformNoiseView
+from aiono.views.trend import LinearTrendView
 
 
 def test_basic_component_views_shape_and_determinism() -> None:

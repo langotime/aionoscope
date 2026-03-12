@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from toyts.ptbxl import ptbxl_all_codes, ptbxl_codes_by_group, ptbxl_group_indices, ptbxl_rhythm_codes
+from aiono.ptbxl import ptbxl_all_codes, ptbxl_codes_by_group, ptbxl_group_indices, ptbxl_rhythm_codes
 
 
 def test_ptbxl_scp_loader_all_codes() -> None:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import torch
 
-from toyts import (
+from aiono import (
     ECGMorphologyParams,
     ECGProcess,
     ECGRhythmParams,
@@ -12,8 +12,8 @@ from toyts import (
     make_ptbxl_kernel_bank,
     ptbxl_kernel_size,
 )
-from toyts.core.samplers import Sampler
-from toyts.ptbxl import ptbxl_all_codes, ptbxl_codes_by_group
+from aiono.core.samplers import Sampler
+from aiono.ptbxl import ptbxl_all_codes, ptbxl_codes_by_group
 
 
 class CycleLabelSampler(Sampler):

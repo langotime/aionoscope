@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import torch
 
-from toyts.core.curriculum import CurriculumSchedule
-from toyts.core.events import EventSchema
-from toyts.processes.curriculum import CurriculumProcess
-from toyts.processes.graph import ProcessGraph
-from toyts.processes.nodes import SetLabelsNode, SingleEventNode
+from aiono.core.curriculum import CurriculumSchedule
+from aiono.core.events import EventSchema
+from aiono.processes.curriculum import CurriculumProcess
+from aiono.processes.graph import ProcessGraph
+from aiono.processes.nodes import SetLabelsNode, SingleEventNode
 
 
 def test_curriculum_schedule_piecewise_linear_probs() -> None:

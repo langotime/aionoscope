@@ -8,7 +8,7 @@ Extend the current PTB-XL ECG simulation so we can generate signals labeled with
 
 …in a way that is **extendable to all 71 SCP labels** without a combinatorial explosion of kernels or process branches.
 
-Source of truth: `scp_statements.csv` (already packaged as `toyts/assets/ptbxl/scp_statements.csv` and loaded via `toyts.ptbxl.scp`).
+Source of truth: `scp_statements.csv` (already packaged as `aiono/assets/ptbxl/scp_statements.csv` and loaded via `aiono.ptbxl.scp`).
 
 ## Scope / definition of “support”
 For a label to be considered “supported”, the generated observation must contain a **process-level** morphological/temporal pattern that is **diagnostic for that code** (at least qualitatively), and the label must be fully reproducible from `meta` seeds + sampled parameters.
@@ -119,7 +119,7 @@ To keep pathology in the process and avoid label-conditioned views, we standardi
 and **do not use `ECGLeadsView`** for PTB-XL tasks.
 
 ### Kernel bank outputs 12 leads directly
-Create `toyts.kernels.ptbxl` (new module) that builds a kernel bank with:
+Create `aiono.kernels.ptbxl` (new module) that builds a kernel bank with:
 - output channels `K=12` (fixed PTB-XL lead order: I, II, III, aVR, aVL, aVF, V1–V6)
 - input channels `T` matching the schema above
 - each event type has a **lead-specific waveform** (weights/sign per lead)
@@ -133,7 +133,7 @@ This keeps labels purely process-driven (which event types are emitted), and the
 
 ## Phenotype mapping (table-driven)
 Add a PTB-XL phenotype mapping module (data-only, explicit tables):
-- `toyts/ptbxl/phenotypes.py`
+- `aiono/ptbxl/phenotypes.py`
 
 It exposes:
 - `PTBXLLoc` enum-like strings (e.g., `global`, `inferior`, `lateral`, `anterior`, `septal`, `anteroseptal`, `anterolateral`, `inferolateral`)
@@ -294,7 +294,7 @@ Both should:
 ## API consolidation / cleanup (remove superseded pieces)
 After migrating PTB-XL examples/tests to the 12-lead kernel renderer, audit for unused ECG-specific rendering code:
 - If `ECGLeadsView` is no longer used by any example/test (and not needed by the PTB-XL pipeline), remove:
-  - `toyts/views/ecg_leads.py` (`ECGLeadsView`)
-  - `toyts/core/utils.py:utils_make_canonical_A0` and `toyts/core/utils.py:utils_make_random_A0` (A0 helpers)
+  - `aiono/views/ecg_leads.py` (`ECGLeadsView`)
+  - `aiono/core/utils.py:utils_make_canonical_A0` and `aiono/core/utils.py:utils_make_random_A0` (A0 helpers)
   - related tests and documentation snippets
-- If `make_ecg_kernel_bank` (3-component + lead-mixing pipeline) becomes unused, supersede it with `toyts.kernels.ptbxl` and remove it to avoid two competing ECG rendering APIs.
+- If `make_ecg_kernel_bank` (3-component + lead-mixing pipeline) becomes unused, supersede it with `aiono.kernels.ptbxl` and remove it to avoid two competing ECG rendering APIs.

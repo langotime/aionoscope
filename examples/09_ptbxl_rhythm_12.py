@@ -5,7 +5,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import torch
 
-from toyts import (
+from aiono import (
     ECGMorphologyParams,
     ECGProcess,
     ECGRhythmParams,
@@ -17,7 +17,7 @@ from toyts import (
     make_ptbxl_kernel_bank,
     ptbxl_kernel_size,
 )
-from toyts.ptbxl import PTBXLLabelSetSampler, ptbxl_all_codes, ptbxl_codes_by_group
+from aiono.ptbxl import PTBXLLabelSetSampler, ptbxl_all_codes, ptbxl_codes_by_group
 
 
 def main() -> None:

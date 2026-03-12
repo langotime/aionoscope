@@ -20,7 +20,7 @@ Constraints from request:
 ## Proposed API / composition (KISS + DRY)
 
 ### 1) Add a tiny ConstantProcess (library) with sample rate in meta
-Create `toyts/processes/constant.py`:
+Create `aiono/processes/constant.py`:
 - `ConstantProcess(seq_len: int, sample_rate_hz: float, value: SamplerLike[float], channels: int = 1)` → `LatentState(latent=constant[B, C, L], events=None, y={}, meta=...)`
   - If `value` is sampled: sample per-sample scalar `value[B]` and broadcast to `[B, C, L]`.
   - Store sampled `value[B]` in `meta["samples"]` (small tensor; no full-size duplication).
@@ -30,8 +30,8 @@ Rationale: we still get the “constant baseline + single view” pattern by pas
 
 ### 2) Add basic component Views (library) split by domain
 Add additive component views, split into small focused modules:
-- `toyts/views/trend.py` (trend components)
-- `toyts/views/periodic.py` (periodic components)
+- `aiono/views/trend.py` (trend components)
+- `aiono/views/periodic.py` (periodic components)
 
 Each view:
 - Accepts `LatentState | Observation`
@@ -45,7 +45,7 @@ Each view:
 - Caches `t_grid` as a buffer when `seq_len` is fixed (`[1, 1, L]` float32)
 
 Component set (one view per “individual component” so we can sample uniformly over them):
-Trend (`toyts/views/trend.py`):
+Trend (`aiono/views/trend.py`):
   - `LinearTrendView(slope: SamplerLike[float], intercept: SamplerLike[float])`
     - `component = slope * (t_grid - 0.5) + intercept`
   - `QuadraticTrendView(a: SamplerLike[float], b: SamplerLike[float], c: SamplerLike[float])`
@@ -60,7 +60,7 @@ Trend (`toyts/views/trend.py`):
   - `PiecewiseLinearTrendView(slope1: SamplerLike[float], slope2: SamplerLike[float], change_t: SamplerLike[float], intercept: SamplerLike[float])`
     - Two linear regimes with one changepoint at `change_t` (in `t_grid` units, 0..1).
 
-Periodic (`toyts/views/periodic.py`):
+Periodic (`aiono/views/periodic.py`):
   - `SineWaveView(amplitude, frequency_hz, phase, offset)`
   - `TriangleWaveView(amplitude, frequency_hz, phase, offset)`
   - `SawtoothWaveView(amplitude, frequency_hz, phase, offset)`
@@ -71,17 +71,17 @@ Periodic (`toyts/views/periodic.py`):
   - These views **require** `process_meta["sample_rate_hz"]` (fail-fast if missing) and use
     `t_sec = arange(L) / sample_rate_hz` when constructing the waveform.
 
-Noise components live in `toyts/views/noise.py` (see step 3) so we don’t duplicate “noise” in two places.
+Noise components live in `aiono/views/noise.py` (see step 3) so we don’t duplicate “noise” in two places.
 
 ### 3) Make existing “signal extraction” composable (small refactor)
-Currently `_extract_signal` lives in `toyts/views/units.py`. To avoid duplicating this logic in `components.py`:
-- Move/duplicate it into a small internal helper (e.g. `toyts/views/_signal.py`) and reuse in:
-  - `toyts/views/units.py`
-  - `toyts/views/trend.py`
-  - `toyts/views/periodic.py`
-  - `toyts/views/noise.py`
+Currently `_extract_signal` lives in `aiono/views/units.py`. To avoid duplicating this logic in `components.py`:
+- Move/duplicate it into a small internal helper (e.g. `aiono/views/_signal.py`) and reuse in:
+  - `aiono/views/units.py`
+  - `aiono/views/trend.py`
+  - `aiono/views/periodic.py`
+  - `aiono/views/noise.py`
 
-Update / extend `toyts/views/noise.py` (required for “ConstantProcess + single view” noise components):
+Update / extend `aiono/views/noise.py` (required for “ConstantProcess + single view” noise components):
 - Rename existing `NoiseView` to `GaussianNoiseView` (clarity) and update all imports/exports/examples/tests/docs.
 - Make `GaussianNoiseView` accept `LatentState | Observation` using the shared extraction helper.
 - Add missing noise types as additional views in the same module (so the library has one canonical “noise” place):
@@ -97,7 +97,7 @@ All noise views also get the same optional per-sample `enabled_key` gating.
 We keep the same pattern as ECG: **process emits EventBatch**, then a **view renders** to `[B, 1, L]`.
 
 Implementation (selected):
-- Add `toyts/views/events_basic.py` with `EventRenderView(seq_len: int, ..., enabled_key: str | None = None)`
+- Add `aiono/views/events_basic.py` with `EventRenderView(seq_len: int, ..., enabled_key: str | None = None)`
 - Supports **multiple events per sample** by **summing contributions over events** (all valid `mask==True` events contribute additively).
 - Renders:
   - spike: scatter amplitude into nearest sample index

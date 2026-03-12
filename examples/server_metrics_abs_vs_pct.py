@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import torch
 from torch import nn
 
-from toyts import (
+from aiono import (
     ClippingView,
     MissingnessView,
     GaussianNoiseView,

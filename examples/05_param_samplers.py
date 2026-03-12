@@ -5,7 +5,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import torch
 
-from toyts import (
+from aiono import (
     BernoulliSampler,
     CategoricalSampler,
     ChoiceSampler,
