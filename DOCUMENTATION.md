@@ -82,14 +82,14 @@ Recommended reading order:
 *   `examples/02_multiview_ssl.py`: generate multiple observation views from one latent process (SSL-style pairing).
 *   `examples/04_curriculum_learning.py`: curriculum-style progression by selecting among multiple processes.
 *   `examples/05_param_samplers.py`: how sampler objects control distributions and how sampler specs appear in `meta`.
-*   `examples/06_basic_components.py`: **balanced** per-sample component gating (`enabled` masks) with `EnableComponentsNode(num_enabled=...)`.
+*   `examples/06_basic_components.py`: canonical `toyts_basic_components/v1` benchmark-aligned per-sample component gating (`enabled` masks) with `EnableComponentsNode(num_enabled=2)`.
 *   `examples/09_ptbxl_rhythm_12.py`, `examples/10_ptbxl_form_19.py`, `examples/11_ptbxl_diagnostic_44.py`: PTB-XL rhythm/form/diagnostic slices over the same `y["scp"]` tensor.
 
 ### Component selection examples (06–08)
 
 Examples 06–08 share the same “basic components” structure (fixed `ViewChain`, per-sample `enabled` masks), but differ in **what is being sampled** and **how labels are represented**:
 
-*   `examples/06_basic_components.py` (balanced mixtures): components are selected uniformly; `num_enabled` can be 1, fixed `k`, or per-sample `k`.
+*   `examples/06_basic_components.py` (benchmark-aligned balanced mixtures): components are selected uniformly under the canonical `toyts_basic_components/v1` contract with `num_enabled=2`.
 *   `examples/07_imbalanced_components.py` (imbalanced classification, `k=1`): samples a **single component** per sample using `component_id=CategoricalSampler(...)`.
     *   Emits a standard single-label target `y["component_id"]` (`int64[B]`), suitable for cross-entropy classification.
     *   Histograms are computed over `component_id` (class counts).
@@ -101,6 +101,40 @@ Conceptually, `k=1` is a special case of k-hot selection, but it is useful to ke
 *   training targets and losses differ (single-label classification vs multi-label set prediction),
 *   the natural summary statistics differ (class histogram vs enable-rate histogram),
 *   sampler interfaces differ (`component_id` vs `component_order`).
+
+### Versioned benchmark contracts
+
+When a downstream repo needs benchmark-comparable semantics, do not hard-code periodic bounds in the consumer. Use the versioned contract helpers in `aiono.benchmarks`.
+
+The current canonical balanced basic-components contract is `toyts_basic_components/v1`:
+
+*   baseline `sampling_frequency_hz = 500`;
+*   `frequency_hz = "auto"` by default;
+*   `sine` upper bound uses Nyquist;
+*   `sawtooth` upper bound uses `sawtooth_min_points_per_period`;
+*   `square` upper bound uses the shortest plateau implied by the configured `duty_cycle` range plus `square_min_points_in_shorter_plateau`.
+
+Minimal resolver usage:
+
+```python
+from aiono import (
+    TOYTS_BASIC_COMPONENTS_BASELINE_SAMPLING_FREQUENCY_HZ,
+    ToyTSBasicComponentsPeriodicConfig,
+    resolve_toyts_basic_components_periodic_contract,
+)
+
+contract = resolve_toyts_basic_components_periodic_contract(
+    seq_len=5000,
+    sampling_frequency_hz=TOYTS_BASIC_COMPONENTS_BASELINE_SAMPLING_FREQUENCY_HZ,
+    config=ToyTSBasicComponentsPeriodicConfig.v1(),
+)
+
+sine_kwargs = contract.signal("sine").view_kwargs()
+square_kwargs = contract.signal("square").view_kwargs()
+manifest_fields = contract.manifest_fields()
+```
+
+`examples/06_basic_components.py` now uses this resolver and mirrors the canonical `toyts_basic_components/v1` benchmark semantics. The imbalanced variants in examples 07 and 08 are still useful research demos, but they are not the checked-in benchmark contract.
 
 ## Sampled Parameters in Meta
 

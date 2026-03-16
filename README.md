@@ -45,6 +45,10 @@ See `examples/06_basic_components.py` for balanced per-sample component selectio
 `examples/07_imbalanced_components.py` for imbalanced (rare) component sampling via
 `CategoricalSampler` + `EnableComponentsNode(..., component_id=...)`.
 
+`examples/06_basic_components.py` now mirrors the canonical
+`toyts_basic_components/v1` benchmark contract: `500 Hz`, `seq_len=5000`,
+`num_enabled=2`, and periodic views resolved through the shared `aiono` benchmark helper.
+
 For imbalanced **k-hot mixtures** (`num_enabled > 1`), see `examples/08_imbalanced_mixtures.py` and
 `WeightedPermutationSampler` + `EnableComponentsNode(..., component_order=...)`.
 
@@ -53,13 +57,14 @@ For imbalanced **k-hot mixtures** (`num_enabled > 1`), see `examples/08_imbalanc
 *   Parameters can be fixed scalars or `SamplerLike` objects, so the same API works for deterministic and sampled generators.
 *   Processes can stay event-first and let views render with `EventImpulseView`, `KernelConvView`, or `EventRenderView`.
 *   One static `ViewChain` can serve balanced, imbalanced, and variable-complexity mixtures through `EnableComponentsNode` and `enabled_key`.
+*   Versioned benchmark contracts live in `aiono.benchmarks`; downstream repos should resolve canonical benchmark semantics there instead of hard-coding periodic ranges in each consumer.
 *   PTB-XL exposes one public target, `y["scp"]`; rhythm, diagnostic, and form tasks are slices over `label_groups`, not separate public label heads.
 
 ## Example Map
 
 *   `examples/01_simple_pulse.py`: smallest end-to-end process -> view -> batch example.
 *   `examples/02_multiview_ssl.py`: generate multiple observation views from one process execution.
-*   `examples/06_basic_components.py`: balanced component mixtures with enabled masks.
+*   `examples/06_basic_components.py`: benchmark-aligned `toyts_basic_components/v1` mixtures with enabled masks.
 *   `examples/07_imbalanced_components.py`: imbalanced single-component datasets via `component_id`.
 *   `examples/08_imbalanced_mixtures.py`: imbalanced k-hot mixtures via `component_order`.
 *   `examples/09_ptbxl_rhythm_12.py`, `examples/10_ptbxl_form_19.py`, `examples/11_ptbxl_diagnostic_44.py`: PTB-XL rhythm/form/diagnostic slices over the same `y["scp"]` tensor.

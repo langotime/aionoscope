@@ -14,14 +14,16 @@ from aiono import (
     GateEventsByEnabledNode,
     LinearTrendView,
     LogTrendView,
-    PiecewiseLinearTrendView,
     ProcessGraph,
     QuadraticTrendView,
     SigmoidTrendView,
     SingleEventNode,
     SynthPipeline,
+    TOYTS_BASIC_COMPONENTS_BASELINE_SAMPLING_FREQUENCY_HZ,
+    ToyTSBasicComponentsPeriodicConfig,
     UnionEventsNode,
     ViewChain,
+    resolve_toyts_basic_components_periodic_contract,
 )
 from aiono.datasets import SynthBatchIterableDataset
 from aiono.processes.constant import ConstantLatentNode
@@ -35,7 +37,7 @@ from aiono.views.periodic import (
     SineWaveView,
     SquareWaveView,
 )
-from aiono import RandIntSampler, SamplerLike, UniformSampler
+from aiono import UniformSampler
 
 
 def build_basic_components_process(
@@ -43,7 +45,7 @@ def build_basic_components_process(
     seq_len: int,
     sample_rate_hz: float,
     component_keys: list[str],
-    num_enabled: SamplerLike[int],
+    num_enabled: int,
 ) -> ProcessGraph:
     schema = EventSchema(
         type_names=["spike", "level_change", "gaussian"],
@@ -181,10 +183,16 @@ def plot_grid(
 def main() -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    seq_len = 512
-    sample_rate_hz = 128.0
+    seq_len = 5000
+    sample_rate_hz = float(TOYTS_BASIC_COMPONENTS_BASELINE_SAMPLING_FREQUENCY_HZ)
     batch_size = 16
     seed = 1234
+
+    periodic_contract = resolve_toyts_basic_components_periodic_contract(
+        seq_len=seq_len,
+        sampling_frequency_hz=int(sample_rate_hz),
+        config=ToyTSBasicComponentsPeriodicConfig.v1(),
+    )
 
     component_keys = [
         "constant",
@@ -195,7 +203,6 @@ def main() -> None:
         "quadratic_trend",
         "log_trend",
         "sigmoid_trend",
-        "piecewise_linear_trend",
         "sine",
         "sawtooth",
         "square",
@@ -204,19 +211,12 @@ def main() -> None:
         "gaussian",
     ]
 
-    # Dataset composition (N = len(component_keys)):
-    # - num_enabled = 1: single component per sample
-    # - num_enabled = k (int): fixed k-hot mix per sample
-    # - num_enabled = RandIntSampler(1, N + 1): variable per-sample k-hot size (mixes 1..N)
-    # - num_enabled = N: all components per sample
-    num_enabled: SamplerLike[int] = 1
-    # num_enabled = RandIntSampler(1, len(component_keys) + 1)
-    if isinstance(num_enabled, int):
-        if num_enabled < 1 or num_enabled > len(component_keys):
-            raise ValueError(
-                "num_enabled must satisfy 1 <= num_enabled <= len(component_keys). "
-                f"Got num_enabled={num_enabled}, len(component_keys)={len(component_keys)}."
-            )
+    num_enabled = 2
+    if num_enabled < 1 or num_enabled > len(component_keys):
+        raise ValueError(
+            "num_enabled must satisfy 1 <= num_enabled <= len(component_keys). "
+            f"Got num_enabled={num_enabled}, len(component_keys)={len(component_keys)}."
+        )
 
     process = build_basic_components_process(
         seq_len=seq_len,
@@ -263,37 +263,19 @@ def main() -> None:
             offset=UniformSampler(-0.5, 0.5),
             enabled_key="sigmoid_trend",
         ),
-        PiecewiseLinearTrendView(
-            seq_len=seq_len,
-            slope1=UniformSampler(-2.0, 2.0),
-            slope2=UniformSampler(-2.0, 2.0),
-            change_t=UniformSampler(0.2, 0.8),
-            intercept=UniformSampler(-0.5, 0.5),
-            enabled_key="piecewise_linear_trend",
-        ),
         SineWaveView(
             seq_len=seq_len,
-            amplitude=UniformSampler(0.2, 1.2),
-            frequency_hz=UniformSampler(0.2, 6.0),
-            phase=UniformSampler(0.0, 2.0 * math.pi),
-            offset=UniformSampler(-0.2, 0.2),
+            **periodic_contract.signal("sine").view_kwargs(),
             enabled_key="sine",
         ),
         SawtoothWaveView(
             seq_len=seq_len,
-            amplitude=UniformSampler(0.2, 1.2),
-            frequency_hz=UniformSampler(0.2, 6.0),
-            phase=UniformSampler(0.0, 2.0 * math.pi),
-            offset=UniformSampler(-0.2, 0.2),
+            **periodic_contract.signal("sawtooth").view_kwargs(),
             enabled_key="sawtooth",
         ),
         SquareWaveView(
             seq_len=seq_len,
-            amplitude=UniformSampler(0.2, 1.2),
-            frequency_hz=UniformSampler(0.2, 6.0),
-            phase=UniformSampler(0.0, 2.0 * math.pi),
-            offset=UniformSampler(-0.2, 0.2),
-            duty_cycle=UniformSampler(0.1, 0.9),
+            **periodic_contract.signal("square").view_kwargs(),
             enabled_key="square",
         ),
     )

@@ -107,6 +107,8 @@ This path does not require `ECGLeadsView`. That is intentional: localization and
 *   When time has physical meaning, public APIs should prefer `frequency_hz` plus `sample_rate_hz` over raw count parameters.
 *   `PulseTrainProcess` follows this rule by deriving pulse count from frequency and duration.
 *   `EventRenderView` also depends on `sample_rate_hz` in process metadata when event parameters are expressed in seconds.
+*   Versioned benchmark semantics that depend on physical units live in `aiono.benchmarks`, not in downstream repos.
+*   For the current `toyts_basic_components/v1` benchmark family, `sampling_frequency=500 Hz` is a baseline contract and `frequency_hz: auto` resolves from sequence length plus waveform-specific recoverability rules.
 *   `SamplerLike` is the public parameter convention:
     *   scalars and 0-d tensors normalize to `ConstantSampler`
     *   sampler-backed parameters always sample with an explicit `torch.Generator`
@@ -145,6 +147,7 @@ This pattern exists to vary mixture complexity without branching the pipeline gr
 ## Package Map
 
 *   `aiono.core`: base types, RNG helpers, pipeline orchestration, samplers.
+*   `aiono.benchmarks`: versioned benchmark contracts and shared resolvers for downstream benchmark consumers.
 *   `aiono.processes`: latent generators, graph runtime, and process nodes.
 *   `aiono.views`: observation-space renderers and distortions.
 *   `aiono.kernels`: kernel banks for event-to-signal rendering.
@@ -155,6 +158,7 @@ This pattern exists to vary mixture complexity without branching the pipeline gr
 
 *   Add a new `Process` when you are changing latent content, event structure, labels, or process-owned randomness.
 *   Add a new `View` when you are changing observation space, sensor mixing, units, sampling, missingness, clipping, or noise.
+*   Add or change code in `aiono.benchmarks` when a downstream benchmark needs a versioned semantic contract that multiple repos must share.
 *   Keep labels as functions of latent process state only unless a benchmark explicitly documents label-dependent augmentation.
 *   Prefer vectorized tensor code over Python loops across batch or time.
 *   Preserve `meta["process"]`; let `ViewChain` own view provenance accumulation.

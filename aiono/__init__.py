@@ -14,6 +14,16 @@ from .core.samplers import (
     UniformSampler,
     WeightedPermutationSampler,
 )
+from .benchmarks import (
+    ResolvedPeriodicSignalConfig,
+    ResolvedToyTSBasicComponentsPeriodicContract,
+    TOYTS_BASIC_COMPONENTS_BASELINE_SAMPLING_FREQUENCY_HZ,
+    TOYTS_BASIC_COMPONENTS_BENCHMARK_FAMILY,
+    TOYTS_BASIC_COMPONENTS_BENCHMARK_VERSION,
+    ToyTSBasicComponentsPeriodicConfig,
+    UniformRange,
+    resolve_toyts_basic_components_periodic_contract,
+)
 from .core.types import LatentState, Observation
 from .kernels.pqrst import make_pqrst_kernel_bank, pqrst_kernel_size
 from .kernels.ptbxl import make_ptbxl_kernel_bank, ptbxl_kernel_size
@@ -124,6 +134,8 @@ __all__ = [
     "QuadraticTrendView",
     "RandIntSampler",
     "RandomWalkNoiseView",
+    "ResolvedPeriodicSignalConfig",
+    "ResolvedToyTSBasicComponentsPeriodicContract",
     "SawtoothWaveView",
     "Sampler",
     "SamplerLike",
@@ -142,9 +154,14 @@ __all__ = [
     "Switch",
     "TimeJitterNode",
     "TimeShiftNode",
+    "TOYTS_BASIC_COMPONENTS_BASELINE_SAMPLING_FREQUENCY_HZ",
+    "TOYTS_BASIC_COMPONENTS_BENCHMARK_FAMILY",
+    "TOYTS_BASIC_COMPONENTS_BENCHMARK_VERSION",
+    "ToyTSBasicComponentsPeriodicConfig",
     "TrendSeasonAnomalyProcess",
     "TriangleWaveView",
     "UnionEventsNode",
+    "UniformRange",
     "UniformNoiseView",
     "UnitsAbsoluteView",
     "UnitsPercentOfCapacityView",
@@ -158,4 +175,5 @@ __all__ = [
     "curriculum_stage_histogram",
     "pqrst_kernel_size",
     "ptbxl_kernel_size",
+    "resolve_toyts_basic_components_periodic_contract",
 ]
