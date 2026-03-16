@@ -5,24 +5,24 @@ import math
 import pytest
 
 from aiono import (
-    TOYTS_BASIC_COMPONENTS_BASELINE_SAMPLING_FREQUENCY_HZ,
-    ToyTSBasicComponentsPeriodicConfig,
+    AIONO_BASIC_COMPONENTS_BASELINE_SAMPLING_FREQUENCY_HZ,
+    AionoBasicComponentsPeriodicConfig,
     UniformRange,
-    resolve_toyts_basic_components_periodic_contract,
+    resolve_aiono_basic_components_periodic_contract,
 )
 
 
 def test_periodic_contract_v1_auto_resolves_expected_bounds() -> None:
-    contract = resolve_toyts_basic_components_periodic_contract(
+    contract = resolve_aiono_basic_components_periodic_contract(
         seq_len=5000,
-        sampling_frequency_hz=TOYTS_BASIC_COMPONENTS_BASELINE_SAMPLING_FREQUENCY_HZ,
-        config=ToyTSBasicComponentsPeriodicConfig.v1(),
+        sampling_frequency_hz=AIONO_BASIC_COMPONENTS_BASELINE_SAMPLING_FREQUENCY_HZ,
+        config=AionoBasicComponentsPeriodicConfig.v1(),
     )
 
     expected_low = 500.0 / 4999.0
     assert contract.periodic_frequency_mode == "auto"
     assert contract.periodic_frequency_resolution_source.endswith(
-        "resolve_toyts_basic_components_periodic_contract"
+        "resolve_aiono_basic_components_periodic_contract"
     )
     assert contract.sawtooth_min_points_per_period == 5
     assert contract.square_min_points_in_shorter_plateau == 2
@@ -41,15 +41,15 @@ def test_periodic_contract_v1_auto_resolves_expected_bounds() -> None:
 
 def test_periodic_contract_v1_rejects_wrong_sampling_frequency() -> None:
     with pytest.raises(ValueError, match="requires the baseline sampling frequency 500 Hz"):
-        resolve_toyts_basic_components_periodic_contract(
+        resolve_aiono_basic_components_periodic_contract(
             seq_len=5000,
             sampling_frequency_hz=1,
-            config=ToyTSBasicComponentsPeriodicConfig.v1(),
+            config=AionoBasicComponentsPeriodicConfig.v1(),
         )
 
 
 def test_periodic_contract_explicit_bounds_respect_square_duty_cycle() -> None:
-    config = ToyTSBasicComponentsPeriodicConfig(
+    config = AionoBasicComponentsPeriodicConfig(
         frequency_hz=UniformRange(0.5, 26.0),
         min_full_periods=1.0,
         nyquist_fraction=0.9,
@@ -67,8 +67,8 @@ def test_periodic_contract_explicit_bounds_respect_square_duty_cycle() -> None:
     )
 
     with pytest.raises(ValueError, match="violating_signals=\\['square'\\]"):
-        resolve_toyts_basic_components_periodic_contract(
+        resolve_aiono_basic_components_periodic_contract(
             seq_len=5000,
-            sampling_frequency_hz=TOYTS_BASIC_COMPONENTS_BASELINE_SAMPLING_FREQUENCY_HZ,
+            sampling_frequency_hz=AIONO_BASIC_COMPONENTS_BASELINE_SAMPLING_FREQUENCY_HZ,
             config=config,
         )

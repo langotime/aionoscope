@@ -16,13 +16,13 @@ from .core.samplers import (
 )
 from .benchmarks import (
     ResolvedPeriodicSignalConfig,
-    ResolvedToyTSBasicComponentsPeriodicContract,
-    TOYTS_BASIC_COMPONENTS_BASELINE_SAMPLING_FREQUENCY_HZ,
-    TOYTS_BASIC_COMPONENTS_BENCHMARK_FAMILY,
-    TOYTS_BASIC_COMPONENTS_BENCHMARK_VERSION,
-    ToyTSBasicComponentsPeriodicConfig,
+    ResolvedAionoBasicComponentsPeriodicContract,
+    AIONO_BASIC_COMPONENTS_BASELINE_SAMPLING_FREQUENCY_HZ,
+    AIONO_BASIC_COMPONENTS_BENCHMARK_FAMILY,
+    AIONO_BASIC_COMPONENTS_BENCHMARK_VERSION,
+    AionoBasicComponentsPeriodicConfig,
     UniformRange,
-    resolve_toyts_basic_components_periodic_contract,
+    resolve_aiono_basic_components_periodic_contract,
 )
 from .core.types import LatentState, Observation
 from .kernels.pqrst import make_pqrst_kernel_bank, pqrst_kernel_size
@@ -135,7 +135,7 @@ __all__ = [
     "RandIntSampler",
     "RandomWalkNoiseView",
     "ResolvedPeriodicSignalConfig",
-    "ResolvedToyTSBasicComponentsPeriodicContract",
+    "ResolvedAionoBasicComponentsPeriodicContract",
     "SawtoothWaveView",
     "Sampler",
     "SamplerLike",
@@ -154,10 +154,10 @@ __all__ = [
     "Switch",
     "TimeJitterNode",
     "TimeShiftNode",
-    "TOYTS_BASIC_COMPONENTS_BASELINE_SAMPLING_FREQUENCY_HZ",
-    "TOYTS_BASIC_COMPONENTS_BENCHMARK_FAMILY",
-    "TOYTS_BASIC_COMPONENTS_BENCHMARK_VERSION",
-    "ToyTSBasicComponentsPeriodicConfig",
+    "AIONO_BASIC_COMPONENTS_BASELINE_SAMPLING_FREQUENCY_HZ",
+    "AIONO_BASIC_COMPONENTS_BENCHMARK_FAMILY",
+    "AIONO_BASIC_COMPONENTS_BENCHMARK_VERSION",
+    "AionoBasicComponentsPeriodicConfig",
     "TrendSeasonAnomalyProcess",
     "TriangleWaveView",
     "UnionEventsNode",
@@ -175,5 +175,5 @@ __all__ = [
     "curriculum_stage_histogram",
     "pqrst_kernel_size",
     "ptbxl_kernel_size",
-    "resolve_toyts_basic_components_periodic_contract",
+    "resolve_aiono_basic_components_periodic_contract",
 ]

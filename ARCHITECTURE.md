@@ -108,7 +108,7 @@ This path does not require `ECGLeadsView`. That is intentional: localization and
 *   `PulseTrainProcess` follows this rule by deriving pulse count from frequency and duration.
 *   `EventRenderView` also depends on `sample_rate_hz` in process metadata when event parameters are expressed in seconds.
 *   Versioned benchmark semantics that depend on physical units live in `aiono.benchmarks`, not in downstream repos.
-*   For the current `toyts_basic_components/v1` benchmark family, `sampling_frequency=500 Hz` is a baseline contract and `frequency_hz: auto` resolves from sequence length plus waveform-specific recoverability rules.
+*   For the current `aiono_basic_components/v1` benchmark family, `sampling_frequency=500 Hz` is a baseline contract and `frequency_hz: auto` resolves from sequence length plus waveform-specific recoverability rules.
 *   `SamplerLike` is the public parameter convention:
     *   scalars and 0-d tensors normalize to `ConstantSampler`
     *   sampler-backed parameters always sample with an explicit `torch.Generator`

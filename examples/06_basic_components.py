@@ -19,11 +19,11 @@ from aiono import (
     SigmoidTrendView,
     SingleEventNode,
     SynthPipeline,
-    TOYTS_BASIC_COMPONENTS_BASELINE_SAMPLING_FREQUENCY_HZ,
-    ToyTSBasicComponentsPeriodicConfig,
+    AIONO_BASIC_COMPONENTS_BASELINE_SAMPLING_FREQUENCY_HZ,
+    AionoBasicComponentsPeriodicConfig,
     UnionEventsNode,
     ViewChain,
-    resolve_toyts_basic_components_periodic_contract,
+    resolve_aiono_basic_components_periodic_contract,
 )
 from aiono.datasets import SynthBatchIterableDataset
 from aiono.processes.constant import ConstantLatentNode
@@ -184,14 +184,14 @@ def main() -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     seq_len = 5000
-    sample_rate_hz = float(TOYTS_BASIC_COMPONENTS_BASELINE_SAMPLING_FREQUENCY_HZ)
+    sample_rate_hz = float(AIONO_BASIC_COMPONENTS_BASELINE_SAMPLING_FREQUENCY_HZ)
     batch_size = 16
     seed = 1234
 
-    periodic_contract = resolve_toyts_basic_components_periodic_contract(
+    periodic_contract = resolve_aiono_basic_components_periodic_contract(
         seq_len=seq_len,
         sampling_frequency_hz=int(sample_rate_hz),
-        config=ToyTSBasicComponentsPeriodicConfig.v1(),
+        config=AionoBasicComponentsPeriodicConfig.v1(),
     )
 
     component_keys = [

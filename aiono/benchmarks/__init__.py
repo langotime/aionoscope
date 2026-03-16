@@ -1,21 +1,21 @@
-from .toyts_basic_components import (
-    TOYTS_BASIC_COMPONENTS_BASELINE_SAMPLING_FREQUENCY_HZ,
-    TOYTS_BASIC_COMPONENTS_BENCHMARK_FAMILY,
-    TOYTS_BASIC_COMPONENTS_BENCHMARK_VERSION,
+from .aiono_basic_components import (
+    AIONO_BASIC_COMPONENTS_BASELINE_SAMPLING_FREQUENCY_HZ,
+    AIONO_BASIC_COMPONENTS_BENCHMARK_FAMILY,
+    AIONO_BASIC_COMPONENTS_BENCHMARK_VERSION,
     ResolvedPeriodicSignalConfig,
-    ResolvedToyTSBasicComponentsPeriodicContract,
-    ToyTSBasicComponentsPeriodicConfig,
+    ResolvedAionoBasicComponentsPeriodicContract,
+    AionoBasicComponentsPeriodicConfig,
     UniformRange,
-    resolve_toyts_basic_components_periodic_contract,
+    resolve_aiono_basic_components_periodic_contract,
 )
 
 __all__ = [
     "ResolvedPeriodicSignalConfig",
-    "ResolvedToyTSBasicComponentsPeriodicContract",
-    "TOYTS_BASIC_COMPONENTS_BASELINE_SAMPLING_FREQUENCY_HZ",
-    "TOYTS_BASIC_COMPONENTS_BENCHMARK_FAMILY",
-    "TOYTS_BASIC_COMPONENTS_BENCHMARK_VERSION",
-    "ToyTSBasicComponentsPeriodicConfig",
+    "ResolvedAionoBasicComponentsPeriodicContract",
+    "AIONO_BASIC_COMPONENTS_BASELINE_SAMPLING_FREQUENCY_HZ",
+    "AIONO_BASIC_COMPONENTS_BENCHMARK_FAMILY",
+    "AIONO_BASIC_COMPONENTS_BENCHMARK_VERSION",
+    "AionoBasicComponentsPeriodicConfig",
     "UniformRange",
-    "resolve_toyts_basic_components_periodic_contract",
+    "resolve_aiono_basic_components_periodic_contract",
 ]

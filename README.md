@@ -46,7 +46,7 @@ See `examples/06_basic_components.py` for balanced per-sample component selectio
 `CategoricalSampler` + `EnableComponentsNode(..., component_id=...)`.
 
 `examples/06_basic_components.py` now mirrors the canonical
-`toyts_basic_components/v1` benchmark contract: `500 Hz`, `seq_len=5000`,
+`aiono_basic_components/v1` benchmark contract: `500 Hz`, `seq_len=5000`,
 `num_enabled=2`, and periodic views resolved through the shared `aiono` benchmark helper.
 
 For imbalanced **k-hot mixtures** (`num_enabled > 1`), see `examples/08_imbalanced_mixtures.py` and
@@ -64,7 +64,7 @@ For imbalanced **k-hot mixtures** (`num_enabled > 1`), see `examples/08_imbalanc
 
 *   `examples/01_simple_pulse.py`: smallest end-to-end process -> view -> batch example.
 *   `examples/02_multiview_ssl.py`: generate multiple observation views from one process execution.
-*   `examples/06_basic_components.py`: benchmark-aligned `toyts_basic_components/v1` mixtures with enabled masks.
+*   `examples/06_basic_components.py`: benchmark-aligned `aiono_basic_components/v1` mixtures with enabled masks.
 *   `examples/07_imbalanced_components.py`: imbalanced single-component datasets via `component_id`.
 *   `examples/08_imbalanced_mixtures.py`: imbalanced k-hot mixtures via `component_order`.
 *   `examples/09_ptbxl_rhythm_12.py`, `examples/10_ptbxl_form_19.py`, `examples/11_ptbxl_diagnostic_44.py`: PTB-XL rhythm/form/diagnostic slices over the same `y["scp"]` tensor.

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-"""Versioned benchmark semantics for the ToyTS basic-components family.
+"""Versioned benchmark semantics for the Aiono basic-components family.
 
-The current public contract is `toyts_basic_components/v1`.
+The current public contract is `aiono_basic_components/v1`.
 Downstream consumers should treat this module as the source of truth for:
 
 - the baseline sampling frequency;
@@ -17,9 +17,9 @@ from typing import Any
 from ..core.samplers import UniformSampler
 
 
-TOYTS_BASIC_COMPONENTS_BENCHMARK_FAMILY = "toyts_basic_components"
-TOYTS_BASIC_COMPONENTS_BENCHMARK_VERSION = "v1"
-TOYTS_BASIC_COMPONENTS_BASELINE_SAMPLING_FREQUENCY_HZ = 500
+AIONO_BASIC_COMPONENTS_BENCHMARK_FAMILY = "aiono_basic_components"
+AIONO_BASIC_COMPONENTS_BENCHMARK_VERSION = "v1"
+AIONO_BASIC_COMPONENTS_BASELINE_SAMPLING_FREQUENCY_HZ = 500
 
 _EXPECTED_RECOVERABILITY_POLICY = {
     "sine": "nyquist",
@@ -93,8 +93,8 @@ class ResolvedPeriodicSignalConfig:
 
 
 @dataclass(frozen=True)
-class ToyTSBasicComponentsPeriodicConfig:
-    """Public config schema for ToyTS basic-components periodic semantics."""
+class AionoBasicComponentsPeriodicConfig:
+    """Public config schema for Aiono basic-components periodic semantics."""
 
     frequency_hz: str | UniformRange
     min_full_periods: float
@@ -149,7 +149,7 @@ class ToyTSBasicComponentsPeriodicConfig:
             )
 
     @classmethod
-    def v1(cls) -> ToyTSBasicComponentsPeriodicConfig:
+    def v1(cls) -> AionoBasicComponentsPeriodicConfig:
         return cls(
             frequency_hz="auto",
             min_full_periods=1.0,
@@ -167,7 +167,7 @@ class ToyTSBasicComponentsPeriodicConfig:
     def from_mapping(
         cls,
         mapping: Mapping[str, Any],
-    ) -> ToyTSBasicComponentsPeriodicConfig:
+    ) -> AionoBasicComponentsPeriodicConfig:
         frequency_hz_raw = mapping.get("frequency_hz")
         if frequency_hz_raw == "auto":
             frequency_hz: str | UniformRange = "auto"
@@ -235,7 +235,7 @@ class ToyTSBasicComponentsPeriodicConfig:
 
 
 @dataclass(frozen=True)
-class ResolvedToyTSBasicComponentsPeriodicContract:
+class ResolvedAionoBasicComponentsPeriodicContract:
     """Fully materialized benchmark semantics for one resolved sequence length."""
 
     benchmark_family: str
@@ -323,15 +323,15 @@ def _make_signal_config(
     )
 
 
-def resolve_toyts_basic_components_periodic_contract(
+def resolve_aiono_basic_components_periodic_contract(
     *,
     seq_len: int,
     sampling_frequency_hz: int,
-    config: ToyTSBasicComponentsPeriodicConfig,
-    benchmark_family: str = TOYTS_BASIC_COMPONENTS_BENCHMARK_FAMILY,
-    benchmark_version: str = TOYTS_BASIC_COMPONENTS_BENCHMARK_VERSION,
-) -> ResolvedToyTSBasicComponentsPeriodicContract:
-    """Resolve waveform-specific periodic bounds for `toyts_basic_components/v1`.
+    config: AionoBasicComponentsPeriodicConfig,
+    benchmark_family: str = AIONO_BASIC_COMPONENTS_BENCHMARK_FAMILY,
+    benchmark_version: str = AIONO_BASIC_COMPONENTS_BENCHMARK_VERSION,
+) -> ResolvedAionoBasicComponentsPeriodicContract:
+    """Resolve waveform-specific periodic bounds for `aiono_basic_components/v1`.
 
     `frequency_hz='auto'` expands to the widest recoverable range allowed by:
 
@@ -342,20 +342,20 @@ def resolve_toyts_basic_components_periodic_contract(
     - duty-cycle-aware shorter-plateau sampling for `square`.
     """
 
-    if benchmark_family != TOYTS_BASIC_COMPONENTS_BENCHMARK_FAMILY:
+    if benchmark_family != AIONO_BASIC_COMPONENTS_BENCHMARK_FAMILY:
         raise ValueError(
-            "Unexpected benchmark_family for ToyTS basic-components resolver: "
+            "Unexpected benchmark_family for Aiono basic-components resolver: "
             f"{benchmark_family!r}."
         )
-    if benchmark_version != TOYTS_BASIC_COMPONENTS_BENCHMARK_VERSION:
+    if benchmark_version != AIONO_BASIC_COMPONENTS_BENCHMARK_VERSION:
         raise ValueError(
-            "Unexpected benchmark_version for ToyTS basic-components resolver: "
+            "Unexpected benchmark_version for Aiono basic-components resolver: "
             f"{benchmark_version!r}."
         )
-    if int(sampling_frequency_hz) != TOYTS_BASIC_COMPONENTS_BASELINE_SAMPLING_FREQUENCY_HZ:
+    if int(sampling_frequency_hz) != AIONO_BASIC_COMPONENTS_BASELINE_SAMPLING_FREQUENCY_HZ:
         raise ValueError(
-            "ToyTS basic-components v1 requires the baseline sampling frequency "
-            f"{TOYTS_BASIC_COMPONENTS_BASELINE_SAMPLING_FREQUENCY_HZ} Hz, got "
+            "Aiono basic-components v1 requires the baseline sampling frequency "
+            f"{AIONO_BASIC_COMPONENTS_BASELINE_SAMPLING_FREQUENCY_HZ} Hz, got "
             f"{int(sampling_frequency_hz)} Hz."
         )
     if seq_len <= 1:
@@ -421,7 +421,7 @@ def resolve_toyts_basic_components_periodic_contract(
     else:
         periodic_frequency_mode = "auto"
         periodic_frequency_resolution_source = (
-            "aiono.resolve_toyts_basic_components_periodic_contract"
+            "aiono.resolve_aiono_basic_components_periodic_contract"
         )
         resolved_bounds = {
             signal_name: UniformRange(low=f_min_full_period, high=resolved_high_auto[signal_name])
@@ -456,10 +456,10 @@ def resolve_toyts_basic_components_periodic_contract(
         ),
     }
 
-    return ResolvedToyTSBasicComponentsPeriodicContract(
+    return ResolvedAionoBasicComponentsPeriodicContract(
         benchmark_family=benchmark_family,
         benchmark_version=benchmark_version,
-        baseline_sampling_frequency_hz=TOYTS_BASIC_COMPONENTS_BASELINE_SAMPLING_FREQUENCY_HZ,
+        baseline_sampling_frequency_hz=AIONO_BASIC_COMPONENTS_BASELINE_SAMPLING_FREQUENCY_HZ,
         sampling_frequency_hz=int(sampling_frequency_hz),
         seq_len=int(seq_len),
         duration_sec=duration_sec,
