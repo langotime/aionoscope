@@ -7,12 +7,16 @@ from torch import nn
 
 from aiono import (
     ECGLeadsView,
+    EventImpulseView,
     GaussianNoiseView,
+    KernelConvView,
     PulseTrainProcess,
     SamplingAggregationView,
     SynthPipeline,
     TrendSeasonAnomalyProcess,
     UnitsAbsoluteView,
+    make_pqrst_kernel_bank,
+    pqrst_kernel_size,
 )
 from aiono.core.utils import utils_make_canonical_A0
 
@@ -22,6 +26,12 @@ def _parse_args() -> argparse.Namespace:
         description="Check torch.compile compatibility for Aionoscope pipelines.",
     )
     parser.add_argument("--process", choices=["pulse", "trend"], required=True)
+    parser.add_argument(
+        "--backend",
+        choices=["eager", "aot_eager", "inductor"],
+        default="eager",
+        help="torch.compile backend to use for the compatibility check.",
+    )
     parser.add_argument("--device", choices=["cpu", "cuda"], required=True)
     parser.add_argument("--batch-size", type=int, required=True)
     parser.add_argument("--seq-len", type=int, required=True)
@@ -62,9 +72,26 @@ def _build_pipeline(
             shape_classes=["gaussian", "sharp_laplace", "biphasic_dog"],
             latent_mode="pqrst3",
         )
+        spacing = (process.seq_len - 1) / (process.num_pulses + 1)
+        kernel_size = pqrst_kernel_size(spacing=spacing, support_sigma=6.0)
+        kernels = make_pqrst_kernel_bank(
+            shape_names=process.shape_classes,
+            spacing=spacing,
+            kernel_size=kernel_size,
+            device=device,
+        )  # [K, T, W]
+        padding = kernel_size // 2
         A0 = utils_make_canonical_A0(num_leads=12, num_latent=3).to(device)  # [C, K]
         views = {
-            "ecg": ECGLeadsView(A0=A0, jitter_std=0.02, max_delay=2),
+            "ecg": nn.Sequential(
+                EventImpulseView(
+                    seq_len=process.seq_len,
+                    amplitude_param="amplitude",
+                    rounding="nearest",
+                ),
+                KernelConvView(kernels=kernels, padding=padding),
+                ECGLeadsView(A0=A0, jitter_std=0.02, max_delay=2),
+            ),
         }
         return SynthPipeline(process=process, views=views)
 
@@ -90,6 +117,7 @@ def _build_pipeline(
 
 def _compile_and_run(
     pipeline: SynthPipeline,
+    backend: str,
     device: torch.device,
     batch_size: int,
     seed: int,
@@ -97,12 +125,12 @@ def _compile_and_run(
     generator = torch.Generator(device=device)
     generator.manual_seed(seed)
 
-    compiled = torch.compile(pipeline)
+    compiled = torch.compile(pipeline, backend=backend)
     output = compiled(batch_size=batch_size, device=device, rng=generator)
 
     for name, observation in output.items():
         x = observation.x  # [B, C, L]
-        print(f"{name}: x={tuple(x.shape)}, dtype={x.dtype}")
+        print(f"{name}: backend={backend}, x={tuple(x.shape)}, dtype={x.dtype}")
 
 
 def main() -> None:
@@ -128,6 +156,7 @@ def main() -> None:
     try:
         _compile_and_run(
             pipeline=pipeline,
+            backend=args.backend,
             device=device,
             batch_size=args.batch_size,
             seed=args.seed,

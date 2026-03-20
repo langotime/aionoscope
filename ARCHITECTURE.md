@@ -1,6 +1,6 @@
 # Aionoscope Architecture
 
-This document records the stable design choices that define the current library shape. Use [README.md](README.md) for onboarding and [DOCUMENTATION.md](DOCUMENTATION.md) for runnable usage patterns and examples.
+This document records the stable design choices that define the current library shape. Use [docs/index.md](docs/index.md) for the repository map, [README.md](README.md) for onboarding, and [DOCUMENTATION.md](DOCUMENTATION.md) for runnable usage patterns and examples.
 
 ## Goals
 
@@ -8,6 +8,18 @@ This document records the stable design choices that define the current library 
 *   Support a progression from isolated events/components to richer mixtures and curricula.
 *   Keep latent content separate from observation nuisances.
 *   Stay reproducible, GPU-friendly, and vectorized.
+
+## Repository Operating Model
+
+Stable repository rules:
+
+*   `AGENTS.md` is the short table of contents for agents, not the full manual.
+*   `docs/` is the repository-local system of record for planning workflow, design notes, catalogs, and repo hygiene.
+*   `README.md`, `ARCHITECTURE.md`, and `DOCUMENTATION.md` remain the top-level public entry points with distinct roles.
+*   `README.md` is human-facing onboarding; agents should update it when needed, but should not rely on it as a primary context source.
+*   Plans live as GitHub issues driven by [docs/planning.md](docs/planning.md), not as checked-in execution-plan Markdown.
+*   The standard validation command is `uv run python -m scripts.harness_validate --skip-profile`.
+*   Stable generated docs belong under `docs/generated/`; transient validation artifacts belong under `.artifacts/validation/`.
 
 ## System Model
 

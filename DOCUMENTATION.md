@@ -8,7 +8,7 @@ The core philosophy of Aionoscope is the strict separation of the data-generatin
 
 Aionoscope is intended to support composable processes across domains. The goal is to generate everything from the simplest time series (single event, repeated events of one type) to complex combinations, so SSL models can be trained with a curriculum that starts with isolated events and gradually increases complexity.
 
-Use `README.md` for the shortest onboarding path and `ARCHITECTURE.md` for the stable design contracts. This document focuses on usage patterns, metadata layout, and runnable examples.
+Use [docs/index.md](docs/index.md) for the repository map, [README.md](README.md) for the shortest onboarding path, and [ARCHITECTURE.md](ARCHITECTURE.md) for the stable design contracts. This document focuses on usage patterns, metadata layout, and runnable examples.
 
 ### Design Goals
 
@@ -71,6 +71,21 @@ The library is built around a unidirectional data flow, which can be visualized 
     *   `meta`: A dictionary of metadata. Process metadata is stored under `meta["process"]`. View metadata is stored under `meta["views"]` as an ordered list (one entry per view in the chain). `SynthPipeline` also adds `meta["pipeline_seed"]`. Use `Observation.view_meta("ViewName")` to fetch a specific view’s metadata.
 
 5.  **SynthPipeline**: This module orchestrates the data generation. It takes a `Process` and a dictionary of `Views` and, when called, generates a batch of data containing all the requested views of the same underlying latent state.
+
+## Repository Workflow
+
+The repository keeps a small number of standard operational entry points:
+
+*   Planning: [docs/planning.md](docs/planning.md)
+*   Docs map: [docs/index.md](docs/index.md)
+*   Human-facing onboarding to update when needed, but not use as primary agent context: [README.md](README.md)
+*   Standard validation command:
+
+```bash
+uv run python -m scripts.harness_validate --skip-profile
+```
+
+The validation harness runs repository structure checks, `pytest`, representative smoke examples, and compile checks. Transient validation outputs are written under `.artifacts/validation/`. Stable generated docs belong under [docs/generated/index.md](docs/generated/index.md).
 
 ## Examples Guide
 

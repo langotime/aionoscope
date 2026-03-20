@@ -2,11 +2,13 @@
 
 **PyTorch-native synthetic time series dataset generator with explicit Process → View separation.**
 
+This document is human-facing onboarding. Agents should update it when the public onboarding story changes, but should gather working context from [docs/index.md](docs/index.md), [ARCHITECTURE.md](ARCHITECTURE.md), and [DOCUMENTATION.md](DOCUMENTATION.md) instead.
+
 Aionoscope is designed to benchmark **Self-Supervised Learning (SSL)** and supervised approaches on time series data. It provides a flexible, GPU-friendly framework to generate multi-view datasets where the underlying latent dynamics ("Process") are strictly separated from the observation model ("View").
 
 Aionoscope is intended to support composable process graphs across domains. The goal is to build both very simple series (single event, repeated events of one type) and progressively richer combinations, enabling curriculum-style training where SSL models start from isolated events and scale to complex multi-component dynamics.
 
-Use `ARCHITECTURE.md` for the stable design contracts and `DOCUMENTATION.md` for usage details, metadata conventions, and the longer example guide.
+Use [docs/index.md](docs/index.md) for the repository map, [ARCHITECTURE.md](ARCHITECTURE.md) for the stable design contracts, and [DOCUMENTATION.md](DOCUMENTATION.md) for usage details, metadata conventions, and the longer example guide.
 
 ## Design Goals
 
@@ -74,6 +76,16 @@ For imbalanced **k-hot mixtures** (`num_enabled > 1`), see `examples/08_imbalanc
 ```bash
 uv sync
 ```
+
+## Validation
+
+Run the standard repository validation path with:
+
+```bash
+uv run python -m scripts.harness_validate --skip-profile
+```
+
+This writes transient machine-readable validation artifacts under `.artifacts/validation/`.
 
 ## Quick Start
 
