@@ -10,6 +10,20 @@ Aionoscope is intended to support composable process graphs across domains. The 
 
 Use [docs/index.md](docs/index.md) for the repository map, [ARCHITECTURE.md](ARCHITECTURE.md) for the stable design contracts, and [DOCUMENTATION.md](DOCUMENTATION.md) for usage details, metadata conventions, and the longer example guide.
 
+## Papers
+
+Both papers were accepted at the MILETS workshop at KDD 2026, by Alexander
+Chemeris, Ming Jin, and Randall Balestriero:
+
+- [Aionoscope: Debugging Latent-State Accessibility in Time-Series Representations](https://arxiv.org/abs/2607.00956)
+  (`arXiv:2607.00956`) — accepted as an **oral**. The instrument in that paper
+  builds on this generator; its benchmark harness lives in
+  [aionoscope-benchmarks](https://github.com/langotime/aionoscope-benchmarks),
+  and its results are published at <https://aionoscope.langotime.ai/>.
+- [LeNEPA: No-Augmentation Next-Latent Prediction for Time-Series Representation Learning](https://arxiv.org/abs/2607.00958)
+  (`arXiv:2607.00958`) — accepted as a **poster**. Its `LeNEPA-Aiono` encoder is
+  trained on data from this generator.
+
 ## Design Goals
 
 *   **Composable process graphs**: Reusable blocks with branching/merging to build complex generators from simple parts.
